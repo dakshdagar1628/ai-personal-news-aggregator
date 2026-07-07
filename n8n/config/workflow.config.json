@@ -1,0 +1,49 @@
+{
+  "_comment": "Global n8n workflow configuration. Referenced by all workflow templates.",
+  "version": "1.0.0",
+
+  "api": {
+    "baseUrl": "{{ $env.NEXT_PUBLIC_APP_URL }}",
+    "newsEndpoint": "/api/news",
+    "sourcesEndpoint": "/api/sources",
+    "reportsEndpoint": "/api/reports",
+    "searchEndpoint": "/api/search"
+  },
+
+  "retry": {
+    "maxAttempts": 3,
+    "initialDelayMs": 1000,
+    "backoffMultiplier": 2,
+    "maxDelayMs": 30000,
+    "retryOnStatus": [429, 500, 502, 503, 504]
+  },
+
+  "rateLimit": {
+    "defaultIntervalMs": 1000,
+    "batchSize": 20,
+    "maxConcurrent": 3
+  },
+
+  "collector": {
+    "defaultCheckIntervalMinutes": 60,
+    "maxItemsPerRun": 100,
+    "minImportanceScore": 0.0,
+    "defaultLanguage": "en"
+  },
+
+  "logging": {
+    "level": "INFO",
+    "includeDebug": false,
+    "logToSupabase": false
+  },
+
+  "schedule": {
+    "collectors": {
+      "fast":   "*/30 * * * *",
+      "normal": "0 * * * *",
+      "slow":   "0 */4 * * *"
+    },
+    "aiProcessing": "*/15 * * * *",
+    "dailyReport":  "30 5 * * *"
+  }
+}
