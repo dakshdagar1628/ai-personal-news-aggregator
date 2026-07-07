@@ -1,0 +1,20 @@
+{
+  "_comment": "Source registry. Each collector reads its config from here.",
+  "sources": [
+    { "slug": "hacker-news",          "name": "Hacker News",          "type": "rss",     "schedule": "fast",   "maxItems": 30, "categoryHint": "hacker-news" },
+    { "slug": "openai-blog",          "name": "OpenAI Blog",          "type": "rss",     "schedule": "normal", "maxItems": 10, "categoryHint": "model-releases" },
+    { "slug": "anthropic-blog",       "name": "Anthropic Blog",       "type": "rss",     "schedule": "normal", "maxItems": 10, "categoryHint": "model-releases" },
+    { "slug": "google-ai-blog",       "name": "Google AI Blog",       "type": "rss",     "schedule": "normal", "maxItems": 10, "categoryHint": "model-releases" },
+    { "slug": "reddit-artificial",    "name": "Reddit r/artificial",  "type": "api",     "schedule": "normal", "maxItems": 25, "categoryHint": "reddit-ai" },
+    { "slug": "reddit-ml",            "name": "Reddit r/ML",          "type": "api",     "schedule": "normal", "maxItems": 25, "categoryHint": "reddit-ai" },
+    { "slug": "github-trending",      "name": "GitHub Trending",      "type": "scraper", "schedule": "slow",   "maxItems": 25, "categoryHint": "github-trending" },
+    { "slug": "github-releases",      "name": "GitHub Releases",      "type": "api",     "schedule": "normal", "maxItems": 20, "categoryHint": "developer-updates" },
+    { "slug": "product-hunt",         "name": "Product Hunt",         "type": "api",     "schedule": "slow",   "maxItems": 20, "categoryHint": "product-hunt" },
+    { "slug": "youtube-ai",           "name": "YouTube AI",           "type": "youtube", "schedule": "slow",   "maxItems": 15, "categoryHint": "youtube" },
+    { "slug": "papers-with-code",     "name": "Papers With Code",     "type": "rss",     "schedule": "slow",   "maxItems": 15, "categoryHint": "research-papers" },
+    { "slug": "ai-tools-directory",   "name": "AI Tools Directory",   "type": "rss",     "schedule": "slow",   "maxItems": 20, "categoryHint": "ai-tools" },
+    { "slug": "mcp-servers",          "name": "MCP Servers",          "type": "api",     "schedule": "slow",   "maxItems": 20, "categoryHint": "mcp-servers" },
+    { "slug": "claude-code-updates",  "name": "Claude Code Updates",  "type": "api",     "schedule": "normal", "maxItems": 10, "categoryHint": "developer-updates" },
+    { "slug": "free-ai-offers",       "name": "Free AI Offers",       "type": "rss",     "schedule": "slow",   "maxItems": 15, "categoryHint": "free-offers" }
+  ]
+}
