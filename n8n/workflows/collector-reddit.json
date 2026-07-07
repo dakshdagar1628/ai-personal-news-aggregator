@@ -1,0 +1,190 @@
+{
+  "name": "collector-reddit",
+  "nodes": [
+    {
+      "id": "c01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c02",
+      "name": "Set Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = {\n  workflow_name:    'collector-reddit',\n  collector_id:     'reddit',\n  collector_name:   'Reddit AI',\n  source_slug:      'reddit',\n  source_type:      'reddit',\n  category_hint:    'community',\n  collector_version:'1.0.0',\n  pipeline_version: '1.0.0',\n  run_id:           `run_${Date.now()}`,\n  started_at:       new Date().toISOString(),\n};\nconsole.log('[START]', JSON.stringify(ctx));\nreturn [{ json: { _ctx: ctx } }];"
+      }
+    },
+    {
+      "id": "c03",
+      "name": "Fetch Reddit",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://oauth.reddit.com/r/MachineLearning+artificial+LocalLLaMA/new.json?limit=25",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "AI-Intelligence-OS/1.0"
+            },
+            {
+              "name": "Authorization",
+              "value": "bearer {{ $env.REDDIT_ACCESS_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c03b",
+      "name": "Extract Reddit Posts",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst posts = (resp.data?.children || []).map(c => c.data).filter(p => p && p.url);\nconsole.log(`[FETCH] got ${posts.length} posts`);\nreturn posts.map(p => ({ json: { ...p, url: p.url.startsWith('/r/') ? `https://reddit.com${p.url}` : p.url, published_at: p.created_utc } }));"
+      }
+    },
+    {
+      "id": "c04",
+      "name": "Add Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nreturn $input.all().map(item => ({ json: { ...item.json, _ctx: ctx } }));"
+      }
+    },
+    {
+      "id": "c05",
+      "name": "Execute Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.PIPELINE_MASTER_WORKFLOW_ID || 'CONFIGURE_AFTER_IMPORT' }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Context": {
+      "main": [
+        [
+          {
+            "node": "Fetch Reddit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Reddit": {
+      "main": [
+        [
+          {
+            "node": "Extract Reddit Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Reddit Posts": {
+      "main": [
+        [
+          {
+            "node": "Add Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Context": {
+      "main": [
+        [
+          {
+            "node": "Execute Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "error-handler",
+    "saveManualExecutions": true
+  },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "collector_id": "reddit",
+    "source_slug": "reddit",
+    "group": "communities",
+    "fetchType": "reddit",
+    "schedule": "0 */6 * * *",
+    "description": "Top AI subreddits",
+    "onlyCollectorSpecificNodes": [
+      "Fetch Reddit",
+      "Extract Reddit Posts"
+    ],
+    "pipelineRef": "pipeline-master",
+    "setupNote": "After importing: set PIPELINE_MASTER_WORKFLOW_ID env var to the pipeline-master workflow ID"
+  }
+}
