@@ -1,0 +1,30 @@
+{
+  "name": "TEMPLATE — 01 Scheduler",
+  "nodes": [
+    {
+      "id": "sched-001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "parameters": {
+        "rule": { "interval": [{ "field": "cronExpression", "expression": "0 * * * *" }] }
+      }
+    },
+    {
+      "id": "sched-002",
+      "name": "Set Workflow Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "// Attach workflow metadata every collector inherits\nconst items = $input.all();\nconst ctx = {\n  workflow_name: '{{ COLLECTOR_NAME }}',\n  source_slug:   '{{ SOURCE_SLUG }}',\n  run_id:        `run_${Date.now()}`,\n  started_at:    new Date().toISOString(),\n  max_items:     100,\n};\nreturn [{ json: { ...items[0]?.json, _ctx: ctx } }];"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger":     { "main": [[{ "node": "Set Workflow Context", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Scheduler template. Replace cron expression and context vars. Every collector starts here." }
+}
