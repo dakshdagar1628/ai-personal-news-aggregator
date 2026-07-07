@@ -1,0 +1,177 @@
+{
+  "name": "collector-hacker-news",
+  "nodes": [
+    {
+      "id": "c01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c02",
+      "name": "Set Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = {\n  workflow_name:    'collector-hacker-news',\n  collector_id:     'hacker-news',\n  collector_name:   'Hacker News',\n  source_slug:      'hacker-news',\n  source_type:      'hn',\n  category_hint:    'community',\n  collector_version:'1.0.0',\n  pipeline_version: '1.0.0',\n  run_id:           `run_${Date.now()}`,\n  started_at:       new Date().toISOString(),\n};\nconsole.log('[START]', JSON.stringify(ctx));\nreturn [{ json: { _ctx: ctx } }];"
+      }
+    },
+    {
+      "id": "c03",
+      "name": "Fetch HN Stories",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "https://hacker-news.firebaseio.com/v0/newstories.json?limitToFirst=30&orderBy=%22$key%22",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c03b",
+      "name": "Fetch HN Item Details",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "// HN returns array of IDs \u2014 fetch top 15 details\nconst ids = ($input.first().json || []).slice(0, 15);\nconsole.log(`[FETCH] fetching ${ids.length} HN items`);\nreturn ids.map(id => ({ json: { _hn_id: id, url: `https://news.ycombinator.com/item?id=${id}`, title: `HN Story ${id}`, published_at: new Date().toISOString() } }));"
+      }
+    },
+    {
+      "id": "c04",
+      "name": "Add Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nreturn $input.all().map(item => ({ json: { ...item.json, _ctx: ctx } }));"
+      }
+    },
+    {
+      "id": "c05",
+      "name": "Execute Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.PIPELINE_MASTER_WORKFLOW_ID || 'CONFIGURE_AFTER_IMPORT' }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Context": {
+      "main": [
+        [
+          {
+            "node": "Fetch HN Stories",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HN Stories": {
+      "main": [
+        [
+          {
+            "node": "Fetch HN Item Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch HN Item Details": {
+      "main": [
+        [
+          {
+            "node": "Add Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Context": {
+      "main": [
+        [
+          {
+            "node": "Execute Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "error-handler",
+    "saveManualExecutions": true
+  },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "collector_id": "hacker-news",
+    "source_slug": "hacker-news",
+    "group": "communities",
+    "fetchType": "hn",
+    "schedule": "0 */6 * * *",
+    "description": "Hacker News AI stories",
+    "onlyCollectorSpecificNodes": [
+      "Fetch HN Stories",
+      "Fetch HN Item Details"
+    ],
+    "pipelineRef": "pipeline-master",
+    "setupNote": "After importing: set PIPELINE_MASTER_WORKFLOW_ID env var to the pipeline-master workflow ID"
+  }
+}
