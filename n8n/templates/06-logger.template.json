@@ -1,0 +1,18 @@
+{
+  "name": "TEMPLATE — 06 Logger",
+  "nodes": [
+    {
+      "id": "log-001",
+      "name": "Execution Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "// Called at end of every workflow. Receives items from storage step.\nconst results = $input.all();\nconst ctx     = $('Set Workflow Context').first()?.json?._ctx ?? {};\nconst stored  = results.filter(r => r.json?.success === true).length;\nconst failed  = results.filter(r => r.json?.success === false).length;\nconst summary = {\n  workflow:     ctx.workflow_name || 'unknown',\n  source_slug:  ctx.source_slug   || 'unknown',\n  run_id:       ctx.run_id        || `run_${Date.now()}`,\n  started_at:   ctx.started_at,\n  finished_at:  new Date().toISOString(),\n  duration_ms:  ctx.started_at ? Date.now() - new Date(ctx.started_at).getTime() : 0,\n  status:       failed > 0 ? 'partial' : 'success',\n  items_stored: stored,\n  items_failed: failed,\n  items_total:  results.length,\n};\nconsole.log('[SUMMARY]', JSON.stringify(summary));\nreturn [{ json: summary }];"
+      }
+    }
+  ],
+  "connections": {},
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Execution summary logger. Always the last node. Reads _ctx set by scheduler template." }
+}
