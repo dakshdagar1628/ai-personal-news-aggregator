@@ -1,0 +1,53 @@
+{
+  "name": "TEMPLATE — 07 Error Handler",
+  "nodes": [
+    {
+      "id": "err-001",
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {}
+    },
+    {
+      "id": "err-002",
+      "name": "Classify Error",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "const err = $input.first().json;\nconst msg = err.execution?.error?.message || 'unknown error';\nconst categories = [\n  { pattern: /rate.?limit|429/i,      category: 'RATE_LIMIT',    retryable: true,  retryDelayMs: 60000 },\n  { pattern: /timeout|ETIMEDOUT/i,    category: 'TIMEOUT',       retryable: true,  retryDelayMs: 5000  },\n  { pattern: /network|ECONNREFUSED/i, category: 'NETWORK',       retryable: true,  retryDelayMs: 10000 },\n  { pattern: /validation|422/i,       category: 'VALIDATION',    retryable: false, retryDelayMs: 0    },\n  { pattern: /not.?found|404/i,       category: 'NOT_FOUND',     retryable: false, retryDelayMs: 0    },\n  { pattern: /auth|401|403/i,         category: 'AUTH',          retryable: false, retryDelayMs: 0    },\n];\nconst match = categories.find(c => c.pattern.test(msg));\nconst classified = {\n  category:     match?.category    || 'UNKNOWN',\n  retryable:    match?.retryable   ?? true,\n  retryDelayMs: match?.retryDelay  || 5000,\n  message:      msg,\n  workflow:     err.workflow?.name,\n  timestamp:    new Date().toISOString(),\n};\nconsole.error('[ERROR]', JSON.stringify(classified));\nreturn [{ json: classified }];"
+      }
+    },
+    {
+      "id": "err-003",
+      "name": "Retryable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{ "leftValue": "={{ $json.retryable }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }]
+        }
+      }
+    },
+    {
+      "id": "err-004",
+      "name": "Log Permanent Failure",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "parameters": {
+        "jsCode": "console.error('[FATAL]', JSON.stringify($input.first().json));\nreturn $input.all();"
+      }
+    }
+  ],
+  "connections": {
+    "Error Trigger":  { "main": [[{ "node": "Classify Error", "type": "main", "index": 0 }]] },
+    "Classify Error": { "main": [[{ "node": "Retryable?",     "type": "main", "index": 0 }]] },
+    "Retryable?":     { "main": [[], [{ "node": "Log Permanent Failure", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Error trigger workflow. Classifies errors, marks retryable vs permanent, logs all failures." }
+}
