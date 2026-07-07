@@ -1,0 +1,193 @@
+{
+  "name": "collector-ai-launches",
+  "nodes": [
+    {
+      "id": "c01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c02",
+      "name": "Set Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = {\n  workflow_name:    'collector-ai-launches',\n  collector_id:     'ai-launches',\n  collector_name:   'AI Launches',\n  source_slug:      'ai-launches',\n  source_type:      'graphql',\n  category_hint:    'product-launches',\n  collector_version:'1.0.0',\n  pipeline_version: '1.0.0',\n  run_id:           `run_${Date.now()}`,\n  started_at:       new Date().toISOString(),\n};\nconsole.log('[START]', JSON.stringify(ctx));\nreturn [{ json: { _ctx: ctx } }];"
+      }
+    },
+    {
+      "id": "c03",
+      "name": "Fetch Product Hunt",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.producthunt.com/v2/api/graphql",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer {{ $env.PRODUCT_HUNT_API_TOKEN }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "body": "{\"query\": \"{ posts(first: 20, order: NEWEST, postedAfter: \\\\\\\"2024-01-01\\\\\\\", topic: \\\\\\\"artificial-intelligence\\\\\\\") { edges { node { id name tagline url votesCount createdAt thumbnail { url } } } } }\"}",
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "c03b",
+      "name": "Extract PH Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const resp = $input.first().json;\nconst posts = (resp.data?.posts?.edges || []).map(e => e.node).filter(Boolean);\nreturn posts.map(p => ({ json: { title: p.name, url: p.url, content_raw: p.tagline, published_at: p.createdAt, metadata: { votes: p.votesCount, ph_id: p.id } } }));"
+      }
+    },
+    {
+      "id": "c04",
+      "name": "Add Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nreturn $input.all().map(item => ({ json: { ...item.json, _ctx: ctx } }));"
+      }
+    },
+    {
+      "id": "c05",
+      "name": "Execute Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        1100,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.PIPELINE_MASTER_WORKFLOW_ID || 'CONFIGURE_AFTER_IMPORT' }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Context": {
+      "main": [
+        [
+          {
+            "node": "Fetch Product Hunt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Product Hunt": {
+      "main": [
+        [
+          {
+            "node": "Extract PH Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PH Items": {
+      "main": [
+        [
+          {
+            "node": "Add Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Context": {
+      "main": [
+        [
+          {
+            "node": "Execute Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "error-handler",
+    "saveManualExecutions": true
+  },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "collector_id": "ai-launches",
+    "source_slug": "ai-launches",
+    "group": "product",
+    "fetchType": "graphql",
+    "schedule": "0 6 * * *",
+    "description": "AI-specific Product Hunt launches",
+    "onlyCollectorSpecificNodes": [
+      "Fetch Product Hunt",
+      "Extract PH Items"
+    ],
+    "pipelineRef": "pipeline-master",
+    "setupNote": "After importing: set PIPELINE_MASTER_WORKFLOW_ID env var to the pipeline-master workflow ID"
+  }
+}
