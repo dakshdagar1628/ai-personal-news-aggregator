@@ -1,0 +1,227 @@
+{
+  "name": "collector-openai",
+  "nodes": [
+    {
+      "id": "n01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300],
+      "parameters": {
+        "rule": {
+          "interval": [{ "field": "cronExpression", "expression": "0 */2 * * *" }]
+        }
+      }
+    },
+    {
+      "id": "n02",
+      "name": "Set Workflow Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 300],
+      "parameters": {
+        "jsCode": "const ctx = {\n  workflow_name:    'collector-openai',\n  source_slug:      'openai-blog',\n  collector_version:'1.0.0',\n  pipeline_version: '1.0.0',\n  run_id:           `run_${Date.now()}`,\n  started_at:       new Date().toISOString(),\n  max_items:        20,\n};\nconsole.log('[START]', JSON.stringify(ctx));\nreturn [{ json: { _ctx: ctx } }];"
+      }
+    },
+    {
+      "id": "n03",
+      "name": "Fetch OpenAI RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [500, 300],
+      "parameters": {
+        "url": "https://openai.com/blog/rss.xml"
+      }
+    },
+    {
+      "id": "n04",
+      "name": "Limit Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 300],
+      "parameters": {
+        "jsCode": "// Respect max_items from context\nconst ctx = $('Set Workflow Context').first().json._ctx;\nconst all = $input.all();\nconst limited = all.slice(0, ctx.max_items || 20);\nconsole.log(`[FETCH] got=${all.length} processing=${limited.length}`);\nreturn limited;"
+      }
+    },
+    {
+      "id": "n05",
+      "name": "Normalize Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "parameters": {
+        "jsCode": "// ── NORMALIZE (inline from shared/normalize.js) ───────────────\nfunction normalizeUrl(url) {\n  if (!url) return '';\n  try {\n    const u = new URL(String(url).trim());\n    ['utm_source','utm_medium','utm_campaign','ref'].forEach(p => u.searchParams.delete(p));\n    return u.href;\n  } catch { return String(url).trim(); }\n}\nfunction normalizeDate(v) {\n  if (!v) return null;\n  try { const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); } catch { return null; }\n}\nfunction normalizeTags(t) {\n  if (!t) return [];\n  return (Array.isArray(t) ? t : String(t).split(','))\n    .map(s => s.trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9-]/g,''))\n    .filter(s => s.length > 0 && s.length <= 50).slice(0,20);\n}\n\nconst normalized = $input.all().map(item => {\n  const raw = item.json;\n  return { json: {\n    title:        String(raw.title || '').trim().replace(/\\s+/g,' ').slice(0,500),\n    url:          normalizeUrl(raw.link || raw.url || ''),\n    source_slug:  'openai-blog',\n    content_raw:  String(raw.content || raw.contentSnippet || raw.description || '').slice(0,50000) || null,\n    author:       String(raw.creator || raw.author || 'OpenAI').slice(0,200) || null,\n    published_at: normalizeDate(raw.isoDate || raw.pubDate),\n    tags:         normalizeTags(raw.categories || []),\n    language:     'en',\n    category_hint:'model-releases',\n    external_id:  String(raw.guid || raw.link || '').slice(0,200) || null,\n    metadata:     { guid: raw.guid, source_type: 'rss' },\n    collected_at: new Date().toISOString(),\n    url_hash:     null,\n  }};\n});\nconsole.log(`[NORMALIZE] processed ${normalized.length} items`);\nreturn normalized;"
+      }
+    },
+    {
+      "id": "n06",
+      "name": "Validate Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "parameters": {
+        "jsCode": "// ── VALIDATE (inline from shared/validate.js) ─────────────────\nconst REQUIRED = ['title','url','source_slug'];\nfunction validate(item) {\n  const errors = [];\n  for (const f of REQUIRED) {\n    if (!item[f] || !String(item[f]).trim()) errors.push({ field: f, error: 'required' });\n  }\n  if (item.url) { try { new URL(item.url); } catch { errors.push({ field:'url', error:'invalid URL' }); } }\n  if (!Array.isArray(item.tags)) errors.push({ field:'tags', error:'must be array' });\n  if (item.published_at) {\n    const d = new Date(item.published_at);\n    if (isNaN(d)) errors.push({ field:'published_at', error:'invalid date' });\n    if (d > new Date()) errors.push({ field:'published_at', error:'future date' });\n  }\n  return { valid: errors.length === 0, errors };\n}\nconst valid = [], invalid = [];\nfor (const item of $input.all()) {\n  const r = validate(item.json);\n  if (r.valid) valid.push(item);\n  else { invalid.push(item); console.warn('[VALIDATE] rejected:', item.json.url, JSON.stringify(r.errors)); }\n}\nconsole.log(`[VALIDATE] valid=${valid.length} invalid=${invalid.length}`);\nreturn valid;"
+      }
+    },
+    {
+      "id": "n07",
+      "name": "Enrich Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 300],
+      "parameters": {
+        "jsCode": "// ── ENRICH (inline from shared/enrich.js) ─────────────────────\nconst ctx = $('Set Workflow Context').first().json._ctx;\n\nfunction hashUrl(url) {\n  const s = url.trim().toLowerCase();\n  let h = 2166136261;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }\n  return h.toString(16).padStart(8,'0');\n}\nfunction estimateReadTime(text) {\n  if (!text) return 1;\n  return Math.max(1, Math.round(text.trim().split(/\\s+/).length / 200));\n}\n\nconst enriched = $input.all().map(item => {\n  const i = item.json;\n  return { json: {\n    ...i,\n    url_hash:            hashUrl(i.url),\n    language:            i.language || 'en',\n    fetched_at:          new Date().toISOString(),\n    estimated_read_time: estimateReadTime(i.content_raw),\n    metadata: {\n      ...(i.metadata || {}),\n      collector_name:    ctx.workflow_name,\n      collector_version: ctx.collector_version,\n      pipeline_version:  ctx.pipeline_version,\n      source_slug:       ctx.source_slug,\n    },\n  }};\n});\nconsole.log(`[ENRICH] enriched ${enriched.length} items`);\nreturn enriched;"
+      }
+    },
+    {
+      "id": "n08",
+      "name": "Check Existing Hashes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1500, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "source_id", "value": "" },
+            { "name": "pageSize",  "value": "100" },
+            { "name": "sortBy",    "value": "collected_at" }
+          ]
+        },
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
+      "id": "n09",
+      "name": "Filter Duplicates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1700, 300],
+      "parameters": {
+        "jsCode": "// ── DEDUP (inline from shared/dedup.js) ───────────────────────\nconst response = $('Check Existing Hashes').first().json;\nconst existing = new Set((response?.data?.results || []).map(r => r.url_hash).filter(Boolean));\nconst allItems = $('Enrich Items').all();\nconst withinBatch = new Set();\nconst newItems = [];\n\nfor (const item of allItems) {\n  const h = item.json.url_hash;\n  if (existing.has(h) || withinBatch.has(h)) {\n    console.log('[DEDUP] skipped:', item.json.url);\n  } else {\n    newItems.push(item);\n    withinBatch.add(h);\n  }\n}\nconsole.log(`[DEDUP] new=${newItems.length} duplicates=${allItems.length - newItems.length}`);\nreturn newItems;"
+      }
+    },
+    {
+      "id": "n10",
+      "name": "Has New Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1900, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "leftValue":  "={{ $input.all().length }}",
+            "rightValue": 0,
+            "operator":   { "type": "number", "operation": "gt" }
+          }]
+        }
+      }
+    },
+    {
+      "id": "n11",
+      "name": "Resolve Source ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2100, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/sources",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [{ "name": "slug", "value": "openai-blog" }]
+        },
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
+      "id": "n12",
+      "name": "Attach Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2300, 200],
+      "parameters": {
+        "jsCode": "const srcResponse = $('Resolve Source ID').first().json;\nconst source = srcResponse?.data;\nconst sourceId = source?.id ?? null;\nif (!sourceId) console.warn('[STORE] source_id not found for slug: openai-blog');\nconst items = $('Filter Duplicates').all();\nreturn items.map(item => ({ json: { ...item.json, source_id: sourceId } })).filter(i => !!i.json.source_id);"
+      }
+    },
+    {
+      "id": "n13",
+      "name": "Store Items",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2500, 200],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/news",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({\n  source_id:    $json.source_id,\n  title:        $json.title,\n  url:          $json.url,\n  content_raw:  $json.content_raw,\n  author:       $json.author,\n  published_at: $json.published_at,\n  tags:         $json.tags,\n  metadata:     $json.metadata\n}) }}",
+        "options": {
+          "retry": { "enabled": true, "maxTries": 3, "waitBetweenTries": 2000 },
+          "response": { "response": { "neverError": true } }
+        }
+      }
+    },
+    {
+      "id": "n14",
+      "name": "No New Items",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [2100, 420],
+      "parameters": {}
+    },
+    {
+      "id": "n15",
+      "name": "Execution Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2700, 300],
+      "parameters": {
+        "jsCode": "const ctx         = $('Set Workflow Context').first().json._ctx;\nconst fetched     = $('Limit Items').all().length;\nconst validated   = $('Validate Items').all().length;\nconst deduplicated= $('Filter Duplicates').all().length;\nconst storeResults= $('Store Items').all();\nconst stored      = storeResults.filter(r => r.json?.success === true).length;\nconst storeFailed = storeResults.filter(r => r.json?.success === false).length;\n\nconst summary = {\n  workflow:          ctx.workflow_name,\n  source_slug:       ctx.source_slug,\n  run_id:            ctx.run_id,\n  started_at:        ctx.started_at,\n  finished_at:       new Date().toISOString(),\n  duration_ms:       Date.now() - new Date(ctx.started_at).getTime(),\n  status:            storeFailed > 0 ? 'partial' : 'success',\n  items_fetched:     fetched,\n  items_validated:   validated,\n  items_deduplicated:deduplicated,\n  items_stored:      stored,\n  items_skipped:     fetched - validated,\n  items_duplicate:   validated - deduplicated,\n  store_failures:    storeFailed,\n};\nconsole.log('[SUMMARY]', JSON.stringify(summary));\nreturn [{ json: summary }];"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger":      { "main": [[{ "node": "Set Workflow Context",   "type": "main", "index": 0 }]] },
+    "Set Workflow Context":  { "main": [[{ "node": "Fetch OpenAI RSS",       "type": "main", "index": 0 }]] },
+    "Fetch OpenAI RSS":      { "main": [[{ "node": "Limit Items",            "type": "main", "index": 0 }]] },
+    "Limit Items":           { "main": [[{ "node": "Normalize Items",        "type": "main", "index": 0 }]] },
+    "Normalize Items":       { "main": [[{ "node": "Validate Items",         "type": "main", "index": 0 }]] },
+    "Validate Items":        { "main": [[{ "node": "Enrich Items",           "type": "main", "index": 0 }]] },
+    "Enrich Items":          { "main": [[{ "node": "Check Existing Hashes",  "type": "main", "index": 0 }]] },
+    "Check Existing Hashes": { "main": [[{ "node": "Filter Duplicates",      "type": "main", "index": 0 }]] },
+    "Filter Duplicates":     { "main": [[{ "node": "Has New Items?",         "type": "main", "index": 0 }]] },
+    "Has New Items?": {
+      "main": [
+        [{ "node": "Resolve Source ID", "type": "main", "index": 0 }],
+        [{ "node": "No New Items",      "type": "main", "index": 0 }]
+      ]
+    },
+    "Resolve Source ID": { "main": [[{ "node": "Attach Source ID", "type": "main", "index": 0 }]] },
+    "Attach Source ID":  { "main": [[{ "node": "Store Items",      "type": "main", "index": 0 }]] },
+    "Store Items":       { "main": [[{ "node": "Execution Summary","type": "main", "index": 0 }]] },
+    "No New Items":      { "main": [[{ "node": "Execution Summary","type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "error-handler",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Production OpenAI Blog collector. Fetches https://openai.com/blog/rss.xml every 2 hours. Reference implementation for all future collectors.",
+    "source": "openai-blog",
+    "feed": "https://openai.com/blog/rss.xml",
+    "pipeline": [
+      "Schedule Trigger", "Set Workflow Context", "Fetch OpenAI RSS", "Limit Items",
+      "Normalize Items", "Validate Items", "Enrich Items", "Check Existing Hashes",
+      "Filter Duplicates", "Has New Items?", "Resolve Source ID", "Attach Source ID",
+      "Store Items", "Execution Summary"
+    ],
+    "onlyCollectorSpecificNode": "Fetch OpenAI RSS"
+  }
+}
