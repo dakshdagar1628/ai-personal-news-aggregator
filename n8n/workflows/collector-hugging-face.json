@@ -1,0 +1,144 @@
+{
+  "name": "collector-hugging-face",
+  "nodes": [
+    {
+      "id": "c01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        100,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 */2 * * *"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "c02",
+      "name": "Set Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        300,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = {\n  workflow_name:    'collector-hugging-face',\n  collector_id:     'hugging-face',\n  collector_name:   'Hugging Face',\n  source_slug:      'hugging-face',\n  source_type:      'rss',\n  category_hint:    'open-source',\n  collector_version:'1.0.0',\n  pipeline_version: '1.0.0',\n  run_id:           `run_${Date.now()}`,\n  started_at:       new Date().toISOString(),\n};\nconsole.log('[START]', JSON.stringify(ctx));\nreturn [{ json: { _ctx: ctx } }];"
+      }
+    },
+    {
+      "id": "c03",
+      "name": "Fetch Hugging Face RSS",
+      "type": "n8n-nodes-base.rssFeedRead",
+      "typeVersion": 1,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "url": "https://huggingface.co/blog/feed.xml"
+      }
+    },
+    {
+      "id": "c04",
+      "name": "Add Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        700,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nreturn $input.all().map(item => ({ json: { ...item.json, _ctx: ctx } }));"
+      }
+    },
+    {
+      "id": "c05",
+      "name": "Execute Pipeline",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "source": "database",
+        "workflowId": "={{ $env.PIPELINE_MASTER_WORKFLOW_ID || 'CONFIGURE_AFTER_IMPORT' }}"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Context": {
+      "main": [
+        [
+          {
+            "node": "Fetch Hugging Face RSS",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Hugging Face RSS": {
+      "main": [
+        [
+          {
+            "node": "Add Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add Context": {
+      "main": [
+        [
+          {
+            "node": "Execute Pipeline",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "errorWorkflow": "error-handler",
+    "saveManualExecutions": true
+  },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "collector_id": "hugging-face",
+    "source_slug": "hugging-face",
+    "group": "ai-companies",
+    "fetchType": "rss",
+    "schedule": "0 */2 * * *",
+    "description": "Hugging Face blog",
+    "onlyCollectorSpecificNodes": [
+      "Fetch Hugging Face RSS"
+    ],
+    "pipelineRef": "pipeline-master",
+    "setupNote": "After importing: set PIPELINE_MASTER_WORKFLOW_ID env var to the pipeline-master workflow ID"
+  }
+}
