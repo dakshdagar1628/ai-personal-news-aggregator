@@ -1,0 +1,166 @@
+{
+  "name": "example-mock-collector",
+  "nodes": [
+    {
+      "id": "node-001",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [120, 300],
+      "parameters": {}
+    },
+    {
+      "id": "node-002",
+      "name": "Set Workflow Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [320, 300],
+      "parameters": {
+        "jsCode": "const ctx = {\n  workflow_name: 'example-mock-collector',\n  source_slug:   'example-source',\n  run_id:        `run_${Date.now()}`,\n  started_at:    new Date().toISOString(),\n};\nconsole.log('[START]', JSON.stringify(ctx));\nreturn [{ json: { _ctx: ctx } }];"
+      }
+    },
+    {
+      "id": "node-003",
+      "name": "Generate Mock Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [520, 300],
+      "parameters": {
+        "jsCode": "// Simulates what a real collector returns — raw, unnormalized items.\n// A real collector replaces ONLY this node.\nconst mockRaw = [\n  {\n    title: '  Anthropic releases Claude 4 with 200K context  ',\n    link:  'https://anthropic.com/news/claude-4',\n    description: 'New model features 200K token context window and extended thinking mode.',\n    creator: 'Anthropic Team',\n    isoDate: '2026-07-06T08:00:00Z',\n    categories: ['LLM', 'Model Release', 'AI'],\n    metadata: { source_type: 'blog' }\n  },\n  {\n    title: 'GPT-5 Technical Report Published',\n    link:  'https://openai.com/research/gpt-5',\n    description: 'OpenAI publishes full technical report covering training and safety.',\n    creator: 'OpenAI',\n    isoDate: '2026-07-06T06:30:00Z',\n    categories: ['OpenAI', 'Research'],\n    metadata: { source_type: 'blog' }\n  },\n  {\n    title: 'Ask HN: Best MCP servers for productivity?',\n    link:  'https://news.ycombinator.com/item?id=99001',\n    description: 'Community discussion on most useful MCP server integrations.',\n    creator: null,\n    isoDate: '2026-07-05T22:00:00Z',\n    categories: ['MCP', 'Tools'],\n    metadata: { points: 342, comments: 87 }\n  },\n  {\n    title: '',\n    link:  'not-a-url',\n    description: 'This item should be rejected by validation.',\n    creator: null,\n    isoDate: null\n  },\n  {\n    title: 'GitHub Trending: open-webui surpasses 50k stars',\n    link:  'https://github.com/open-webui/open-webui',\n    description: 'open-webui now has over 50,000 GitHub stars, trending #1 today.',\n    creator: null,\n    isoDate: '2026-07-06T00:00:00Z',\n    categories: ['GitHub', 'Open Source'],\n    metadata: { stars: 50200, language: 'Python' }\n  }\n];\nreturn mockRaw.map(item => ({ json: item }));"
+      }
+    },
+    {
+      "id": "node-004",
+      "name": "Normalize Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [720, 300],
+      "parameters": {
+        "jsCode": "const SOURCE_SLUG = 'example-source';\n\nfunction normalizeUrl(url) {\n  if (!url) return '';\n  try {\n    const u = new URL(String(url).trim());\n    ['utm_source','utm_medium','utm_campaign','ref'].forEach(p => u.searchParams.delete(p));\n    return u.href;\n  } catch { return String(url).trim(); }\n}\nfunction normalizeDate(v) {\n  if (!v) return null;\n  try { const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); } catch { return null; }\n}\nfunction normalizeTags(t) {\n  if (!t) return [];\n  return (Array.isArray(t) ? t : String(t).split(','))\n    .map(s => s.trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9-]/g,''))\n    .filter(s => s.length > 0 && s.length <= 50).slice(0,20);\n}\n\nconst normalized = $input.all().map(item => {\n  const raw = item.json;\n  return { json: {\n    title:        String(raw.title || '').trim().replace(/\\s+/g,' ').slice(0,500),\n    url:          normalizeUrl(raw.url || raw.link || raw.href || ''),\n    source_slug:  SOURCE_SLUG,\n    content_raw:  String(raw.content_raw || raw.description || raw.body || '').slice(0,50000) || null,\n    author:       String(raw.author || raw.creator || '').slice(0,200) || null,\n    published_at: normalizeDate(raw.published_at || raw.pubDate || raw.isoDate),\n    tags:         normalizeTags(raw.tags || raw.categories || []),\n    language:     'en',\n    category_hint:raw.category_hint || null,\n    external_id:  String(raw.id || raw.guid || '').slice(0,200) || null,\n    metadata:     raw.metadata || {},\n    collected_at: new Date().toISOString(),\n    url_hash:     null,\n  }};\n});\nconsole.log(`[NORMALIZE] processed ${normalized.length} items`);\nreturn normalized;"
+      }
+    },
+    {
+      "id": "node-005",
+      "name": "Validate Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [920, 300],
+      "parameters": {
+        "jsCode": "const REQUIRED = ['title','url','source_slug'];\nfunction validate(item) {\n  const errors = [];\n  for (const f of REQUIRED) {\n    if (!item[f] || !String(item[f]).trim()) errors.push({ field: f, error: 'required' });\n  }\n  if (item.url) { try { new URL(item.url); } catch { errors.push({ field:'url', error:'invalid URL' }); } }\n  if (!Array.isArray(item.tags)) errors.push({ field:'tags', error:'must be array' });\n  if (item.published_at) {\n    const d = new Date(item.published_at);\n    if (isNaN(d)) errors.push({ field:'published_at', error:'invalid date' });\n  }\n  return { valid: errors.length === 0, errors };\n}\n\nconst valid = [], invalid = [];\nfor (const item of $input.all()) {\n  const r = validate(item.json);\n  if (r.valid) valid.push(item);\n  else { invalid.push(item); console.warn('[VALIDATE] rejected:', JSON.stringify({ url: item.json.url, errors: r.errors })); }\n}\nconsole.log(`[VALIDATE] valid=${valid.length} invalid=${invalid.length}`);\nreturn valid;"
+      }
+    },
+    {
+      "id": "node-006",
+      "name": "Attach URL Hashes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1120, 300],
+      "parameters": {
+        "jsCode": "function hashUrl(url) {\n  const s = url.trim().toLowerCase();\n  let h = 2166136261;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }\n  return h.toString(16).padStart(8,'0');\n}\nreturn $input.all().map(item => ({ json: { ...item.json, url_hash: hashUrl(item.json.url) } }));"
+      }
+    },
+    {
+      "id": "node-007",
+      "name": "Check Existing (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1320, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "pageSize", "value": "100" }
+          ]
+        },
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
+      "id": "node-008",
+      "name": "Filter Duplicates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1520, 300],
+      "parameters": {
+        "jsCode": "// Existing hashes from the search response\nconst response   = $('Check Existing (API)').first().json;\nconst existing   = new Set((response?.data?.results || []).map(r => r.url_hash).filter(Boolean));\nconst allItems   = $('Attach URL Hashes').all();\nconst withinBatch = new Set();\nconst newItems   = [];\n\nfor (const item of allItems) {\n  const h = item.json.url_hash;\n  if (existing.has(h) || withinBatch.has(h)) {\n    console.log('[DEDUP] skipped:', item.json.url);\n  } else {\n    newItems.push(item);\n    withinBatch.add(h);\n  }\n}\nconsole.log(`[DEDUP] new=${newItems.length} skipped=${allItems.length - newItems.length}`);\nreturn newItems;"
+      }
+    },
+    {
+      "id": "node-009",
+      "name": "Has New Items?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1720, 300],
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": true, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [{
+            "leftValue":  "={{ $input.all().length }}",
+            "rightValue": 0,
+            "operator":   { "type": "number", "operation": "gt" }
+          }]
+        }
+      }
+    },
+    {
+      "id": "node-010",
+      "name": "Store Items (API)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1920, 220],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/news",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ source_id: '00000000-0000-0000-0000-000000000001', title: $json.title, url: $json.url, content_raw: $json.content_raw, author: $json.author, published_at: $json.published_at, tags: $json.tags, metadata: $json.metadata }) }}",
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
+      "id": "node-011",
+      "name": "No New Items",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1920, 400],
+      "parameters": {}
+    },
+    {
+      "id": "node-012",
+      "name": "Execution Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2120, 300],
+      "parameters": {
+        "jsCode": "const ctx      = $('Set Workflow Context').first().json._ctx;\nconst stored   = $('Store Items (API)').all().filter(r => r.json?.success).length;\nconst summary  = {\n  workflow:     ctx.workflow_name,\n  source_slug:  ctx.source_slug,\n  run_id:       ctx.run_id,\n  started_at:   ctx.started_at,\n  finished_at:  new Date().toISOString(),\n  duration_ms:  Date.now() - new Date(ctx.started_at).getTime(),\n  status:       'success',\n  items_stored: stored,\n  items_total:  $('Validate Items').all().length,\n};\nconsole.log('[SUMMARY]', JSON.stringify(summary));\nreturn [{ json: summary }];"
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger":       { "main": [[{ "node": "Set Workflow Context",  "type": "main", "index": 0 }]] },
+    "Set Workflow Context":  { "main": [[{ "node": "Generate Mock Data",   "type": "main", "index": 0 }]] },
+    "Generate Mock Data":    { "main": [[{ "node": "Normalize Items",      "type": "main", "index": 0 }]] },
+    "Normalize Items":       { "main": [[{ "node": "Validate Items",       "type": "main", "index": 0 }]] },
+    "Validate Items":        { "main": [[{ "node": "Attach URL Hashes",    "type": "main", "index": 0 }]] },
+    "Attach URL Hashes":     { "main": [[{ "node": "Check Existing (API)", "type": "main", "index": 0 }]] },
+    "Check Existing (API)":  { "main": [[{ "node": "Filter Duplicates",    "type": "main", "index": 0 }]] },
+    "Filter Duplicates":     { "main": [[{ "node": "Has New Items?",       "type": "main", "index": 0 }]] },
+    "Has New Items?": {
+      "main": [
+        [{ "node": "Store Items (API)", "type": "main", "index": 0 }],
+        [{ "node": "No New Items",      "type": "main", "index": 0 }]
+      ]
+    },
+    "Store Items (API)":    { "main": [[{ "node": "Execution Summary", "type": "main", "index": 0 }]] },
+    "No New Items":         { "main": [[{ "node": "Execution Summary", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "error-handler" },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Reference collector. Replace 'Generate Mock Data' node with real fetch logic. All other nodes are shared infrastructure.",
+    "pipeline": ["Manual Trigger", "Set Workflow Context", "Generate Mock Data", "Normalize Items", "Validate Items", "Attach URL Hashes", "Check Existing (API)", "Filter Duplicates", "Has New Items?", "Store Items (API)", "Execution Summary"]
+  }
+}
