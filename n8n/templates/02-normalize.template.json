@@ -1,0 +1,18 @@
+{
+  "name": "TEMPLATE — 02 Normalize",
+  "nodes": [
+    {
+      "id": "norm-001",
+      "name": "Normalize Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "// ── NORMALIZE (copy from shared/normalize.js) ──────────────────\nfunction normalizeUrl(url) {\n  if (!url) return '';\n  try {\n    const u = new URL(String(url).trim());\n    ['utm_source','utm_medium','utm_campaign','ref'].forEach(p => u.searchParams.delete(p));\n    return u.href;\n  } catch { return String(url).trim(); }\n}\nfunction normalizeDate(v) {\n  if (!v) return null;\n  try { const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); } catch { return null; }\n}\nfunction normalizeTags(t) {\n  if (!t) return [];\n  return (Array.isArray(t) ? t : String(t).split(','))\n    .map(s => s.trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9-]/g,''))\n    .filter(s => s.length > 0 && s.length <= 50).slice(0,20);\n}\nfunction normalizeItem(raw, sourceSlug) {\n  return {\n    title:        String(raw.title || '').trim().replace(/\\s+/g,' ').slice(0,500),\n    url:          normalizeUrl(raw.url || raw.link || ''),\n    source_slug:  sourceSlug || raw.source_slug || '',\n    content_raw:  String(raw.content_raw || raw.description || raw.body || '').slice(0,50000) || null,\n    author:       String(raw.author || raw.creator || '').slice(0,200) || null,\n    published_at: normalizeDate(raw.published_at || raw.pubDate || raw.isoDate),\n    tags:         normalizeTags(raw.tags || raw.categories || []),\n    language:     raw.language || 'en',\n    category_hint:raw.category_hint || null,\n    external_id:  String(raw.id || raw.guid || raw.external_id || '').slice(0,200) || null,\n    metadata:     raw.metadata || {},\n    collected_at: new Date().toISOString(),\n    url_hash:     null,\n  };\n}\n// ── APPLY TO ALL ITEMS ─────────────────────────────────────────\nconst SOURCE_SLUG = '{{ SOURCE_SLUG }}';\nreturn $input.all().map(item => ({\n  json: normalizeItem(item.json, SOURCE_SLUG)\n}));"
+      }
+    }
+  ],
+  "connections": {},
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Normalize raw collector output. Replace SOURCE_SLUG. Inline code from shared/normalize.js." }
+}
