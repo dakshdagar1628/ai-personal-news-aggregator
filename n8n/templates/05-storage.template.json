@@ -1,0 +1,48 @@
+{
+  "name": "TEMPLATE — 05 Storage",
+  "nodes": [
+    {
+      "id": "st-001",
+      "name": "Lookup Source ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [240, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL }}/api/sources",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [{ "name": "active", "value": "true" }] }
+      }
+    },
+    {
+      "id": "st-002",
+      "name": "Map Source ID",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "const sources = $('Lookup Source ID').first().json?.data || [];\nconst items   = $input.all();\nreturn items.map(item => {\n  const src = sources.find(s => s.slug === item.json.source_slug);\n  return { json: { ...item.json, source_id: src?.id ?? null } };\n}).filter(i => {\n  if (!i.json.source_id) console.warn('[STORAGE] unknown source_slug:', i.json.source_slug);\n  return !!i.json.source_id;\n});"
+      }
+    },
+    {
+      "id": "st-003",
+      "name": "Store News Item",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL }}/api/news",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={{ JSON.stringify({ source_id: $json.source_id, title: $json.title, url: $json.url, content_raw: $json.content_raw, author: $json.author, published_at: $json.published_at, tags: $json.tags, metadata: $json.metadata }) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Lookup Source ID": { "main": [[{ "node": "Map Source ID",   "type": "main", "index": 0 }]] },
+    "Map Source ID":    { "main": [[{ "node": "Store News Item", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Resolves source_slug → source_id then POSTs each item to /api/news." }
+}
