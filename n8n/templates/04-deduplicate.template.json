@@ -1,0 +1,49 @@
+{
+  "name": "TEMPLATE — 04 Deduplicate",
+  "nodes": [
+    {
+      "id": "dd-001",
+      "name": "Attach URL Hashes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 300],
+      "parameters": {
+        "jsCode": "// FNV-1a hash — no crypto needed\nfunction hashUrl(url) {\n  const s = url.trim().toLowerCase();\n  let h = 2166136261;\n  for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }\n  return h.toString(16).padStart(8,'0');\n}\nreturn $input.all().map(item => ({ json: { ...item.json, url_hash: hashUrl(item.json.url) } }));"
+      }
+    },
+    {
+      "id": "dd-002",
+      "name": "Check Existing Hashes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [460, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL }}/api/search",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            { "name": "url_hash", "value": "={{ $input.all().map(i => i.json.url_hash).join(',') }}" },
+            { "name": "pageSize", "value": "100" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "dd-003",
+      "name": "Filter New Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [680, 300],
+      "parameters": {
+        "jsCode": "// Get existing hashes from search response\nconst existing = new Set(\n  ($input.first().json?.data?.results || []).map(r => r.url_hash).filter(Boolean)\n);\n// Re-attach original items (stored in $('Attach URL Hashes').all())\nconst all = $('Attach URL Hashes').all();\nconst seen = new Set();\nconst newItems = [];\nfor (const item of all) {\n  const h = item.json.url_hash;\n  if (!existing.has(h) && !seen.has(h)) {\n    newItems.push(item);\n    seen.add(h);\n  } else {\n    console.log('[DEDUP] skipped:', item.json.url);\n  }\n}\nconsole.log(`[DEDUP] new=${newItems.length} skipped=${all.length - newItems.length}`);\nreturn newItems;"
+      }
+    }
+  ],
+  "connections": {
+    "Attach URL Hashes":    { "main": [[{ "node": "Check Existing Hashes", "type": "main", "index": 0 }]] },
+    "Check Existing Hashes":{ "main": [[{ "node": "Filter New Items",       "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Hash URLs, check existing in DB, pass only new items forward." }
+}
