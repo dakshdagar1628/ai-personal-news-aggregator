@@ -1,0 +1,130 @@
+-- =============================================================================
+-- Migration 001: Initial Schema
+-- AI Intelligence OS
+-- =============================================================================
+
+BEGIN;
+
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- =============================================================================
+-- FUNCTION: auto-update updated_at
+-- =============================================================================
+CREATE OR REPLACE FUNCTION update_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =============================================================================
+-- TABLE: sources
+-- Each row represents one data source (RSS feed, API endpoint, scraper target)
+-- =============================================================================
+CREATE TABLE sources (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name                    TEXT NOT NULL,                          -- Human label e.g. "Hacker News"
+  slug                    TEXT NOT NULL UNIQUE,                   -- Machine key e.g. "hacker-news"
+  type                    TEXT NOT NULL CHECK (type IN ('rss','api','scraper','youtube')),
+  url                     TEXT NOT NULL,                          -- Feed/base URL
+  is_active               BOOLEAN NOT NULL DEFAULT TRUE,          -- Toggle without deleting
+  check_interval_minutes  INTEGER NOT NULL DEFAULT 60,            -- n8n poll frequency
+  last_checked_at         TIMESTAMPTZ,                            -- Freshness tracking
+  error_count             INTEGER NOT NULL DEFAULT 0,             -- Reliability metric
+  metadata                JSONB,                                  -- Per-source config (subreddit, channel ID, etc.)
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER sources_updated_at
+  BEFORE UPDATE ON sources
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- =============================================================================
+-- TABLE: categories
+-- =============================================================================
+CREATE TABLE categories (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        TEXT NOT NULL UNIQUE,
+  slug        TEXT NOT NULL UNIQUE,
+  description TEXT,
+  color       TEXT,               -- Hex color for UI badges
+  icon        TEXT,               -- Icon name (lucide-react)
+  is_active   BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order  INTEGER NOT NULL DEFAULT 0,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- =============================================================================
+-- TABLE: news
+-- Core content table. One row per unique URL collected.
+-- =============================================================================
+CREATE TABLE news (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  source_id        UUID NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
+  category_id      UUID REFERENCES categories(id) ON DELETE SET NULL,
+  title            TEXT NOT NULL,
+  url              TEXT NOT NULL,
+  url_hash         TEXT NOT NULL UNIQUE,   -- SHA-256 of URL for dedup
+  content_raw      TEXT,                   -- Raw scraped/RSS content
+  content_summary  TEXT,                   -- AI-generated summary
+  author           TEXT,
+  published_at     TIMESTAMPTZ,            -- Original publish time
+  collected_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  importance_score NUMERIC(3,2),           -- AI score 0.00–1.00
+  tags             TEXT[] NOT NULL DEFAULT '{}',
+  is_processed     BOOLEAN NOT NULL DEFAULT FALSE,   -- AI processing done?
+  is_featured      BOOLEAN NOT NULL DEFAULT FALSE,   -- Top story flag
+  is_duplicate     BOOLEAN NOT NULL DEFAULT FALSE,
+  duplicate_of     UUID REFERENCES news(id) ON DELETE SET NULL,
+  metadata         JSONB,                 -- Source-specific extras (upvotes, stars, etc.)
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER news_updated_at
+  BEFORE UPDATE ON news
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE INDEX idx_news_source_id      ON news(source_id);
+CREATE INDEX idx_news_category_id    ON news(category_id);
+CREATE INDEX idx_news_url_hash       ON news(url_hash);
+CREATE INDEX idx_news_published_at   ON news(published_at DESC);
+CREATE INDEX idx_news_collected_at   ON news(collected_at DESC);
+CREATE INDEX idx_news_is_processed   ON news(is_processed) WHERE is_processed = FALSE;
+CREATE INDEX idx_news_importance     ON news(importance_score DESC);
+
+-- =============================================================================
+-- TABLE: daily_reports
+-- One row per calendar day. Generated by n8n at 5:30am.
+-- =============================================================================
+CREATE TABLE daily_reports (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  report_date             DATE NOT NULL UNIQUE,        -- One report per day
+  title                   TEXT NOT NULL,
+  summary                 TEXT,                        -- AI executive summary
+  top_stories             JSONB,                       -- Array of curated story objects
+  content_by_category     JSONB,                       -- Keyed by category slug
+  total_items             INTEGER NOT NULL DEFAULT 0,
+  processed_items         INTEGER NOT NULL DEFAULT 0,
+  status                  TEXT NOT NULL DEFAULT 'draft'
+                            CHECK (status IN ('draft','generating','ready','failed')),
+  generated_at            TIMESTAMPTZ,
+  generation_duration_ms  INTEGER,                     -- Performance tracking
+  ai_model_used           TEXT,
+  ai_tokens_used          INTEGER,                     -- Cost tracking
+  metadata                JSONB,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TRIGGER daily_reports_updated_at
+  BEFORE UPDATE ON daily_reports
+  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE INDEX idx_daily_reports_date   ON daily_reports(report_date DESC);
+CREATE INDEX idx_daily_reports_status ON daily_reports(status);
+
+COMMIT;
