@@ -1,0 +1,18 @@
+{
+  "name": "TEMPLATE — 03 Validate",
+  "nodes": [
+    {
+      "id": "val-001",
+      "name": "Validate Items",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "parameters": {
+        "jsCode": "// ── VALIDATE (from shared/validate.js) ────────────────────────\nconst REQUIRED = ['title','url','source_slug'];\nconst MAX_LEN  = { title:500, url:2000, content_raw:50000, author:200 };\n\nfunction validateItem(item) {\n  const errors = [];\n  for (const f of REQUIRED) {\n    if (!item[f] || String(item[f]).trim() === '') errors.push({ field: f, error: 'required' });\n  }\n  if (item.url) { try { new URL(item.url); } catch { errors.push({ field:'url', error:'invalid URL' }); } }\n  for (const [f, max] of Object.entries(MAX_LEN)) {\n    if (item[f] && String(item[f]).length > max) errors.push({ field: f, error: `exceeds max ${max}` });\n  }\n  if (!Array.isArray(item.tags)) errors.push({ field:'tags', error:'must be array' });\n  if (item.published_at) {\n    const d = new Date(item.published_at);\n    if (isNaN(d)) errors.push({ field:'published_at', error:'invalid date' });\n    else if (d > new Date()) errors.push({ field:'published_at', error:'future date' });\n  }\n  return { valid: errors.length === 0, errors };\n}\n\nconst valid = [], invalid = [];\nfor (const item of $input.all()) {\n  const r = validateItem(item.json);\n  if (r.valid) valid.push({ json: item.json });\n  else {\n    invalid.push({ json: item.json });\n    console.log('[VALIDATE] rejected:', item.json.url, r.errors);\n  }\n}\nconsole.log(`[VALIDATE] valid=${valid.length} invalid=${invalid.length}`);\nreturn valid; // only valid items continue"
+      }
+    }
+  ],
+  "connections": {},
+  "settings": { "executionOrder": "v1" },
+  "_meta": { "version": "1.0.0", "description": "Validates required fields, URL format, dates. Invalid items are logged and dropped." }
+}
