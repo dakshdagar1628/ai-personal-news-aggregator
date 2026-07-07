@@ -1,0 +1,53 @@
+{
+  "name": "report-generator",
+  "nodes": [
+    {
+      "id": "r01", "name": "Schedule Trigger (8 PM)",
+      "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [100, 300],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "30 20 * * *" }] } }
+    },
+    {
+      "id": "r02", "name": "Set Report Context",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [320, 300],
+      "parameters": { "jsCode": "const today = new Date().toISOString().slice(0,10);\nreturn [{ json: { date: today, run_id: `report_${Date.now()}`, started_at: new Date().toISOString() } }];" }
+    },
+    {
+      "id": "r03", "name": "Generate Report",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [540, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/reports/regenerate",
+        "sendBody": true, "contentType": "json",
+        "body": "={{ JSON.stringify({ date: $json.date }) }}",
+        "options": { "timeout": 300000, "retry": { "enabled": true, "maxTries": 2, "waitBetweenTries": 10000 }, "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
+      "id": "r04", "name": "Check Result",
+      "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [760, 300],
+      "parameters": { "conditions": { "conditions": [{ "leftValue": "={{ $input.first().json?.success }}", "rightValue": true, "operator": { "type": "boolean", "operation": "equal" } }] } }
+    },
+    {
+      "id": "r05", "name": "Log Success",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [980, 200],
+      "parameters": { "jsCode": "const r = $input.first().json?.data;\nconsole.log('[REPORT] generated:', r?.report_date, 'articles:', r?.statistics?.articles_processed);\nreturn [{ json: { status: 'success', date: r?.report_date, articles: r?.statistics?.articles_processed } }];" }
+    },
+    {
+      "id": "r06", "name": "Log Failure",
+      "type": "n8n-nodes-base.code", "typeVersion": 2, "position": [980, 420],
+      "parameters": { "jsCode": "console.error('[REPORT] failed:', JSON.stringify($input.first().json));\nreturn $input.all();" }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger (8 PM)": { "main": [[{ "node": "Set Report Context", "type": "main", "index": 0 }]] },
+    "Set Report Context":      { "main": [[{ "node": "Generate Report",     "type": "main", "index": 0 }]] },
+    "Generate Report":         { "main": [[{ "node": "Check Result",        "type": "main", "index": 0 }]] },
+    "Check Result": { "main": [
+      [{ "node": "Log Success", "type": "main", "index": 0 }],
+      [{ "node": "Log Failure", "type": "main", "index": 0 }]
+    ]}
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "error-handler", "saveManualExecutions": true },
+  "active": false,
+  "_meta": { "version": "1.0.0", "description": "Generates daily intelligence report at 8 PM. Calls POST /api/reports/regenerate. No notifications in this phase." }
+}
