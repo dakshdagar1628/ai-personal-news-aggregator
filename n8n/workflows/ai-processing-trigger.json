@@ -1,0 +1,87 @@
+{
+  "name": "ai-processing-trigger",
+  "nodes": [
+    {
+      "id": "t01",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [100, 300],
+      "parameters": { "rule": { "interval": [{ "field": "cronExpression", "expression": "*/15 * * * *" }] } }
+    },
+    {
+      "id": "t02",
+      "name": "Check Queue Size",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [320, 300],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/processing/queue?action=stats",
+        "options": { "response": { "response": { "neverError": true } } }
+      }
+    },
+    {
+      "id": "t03",
+      "name": "Has Pending Jobs?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [540, 300],
+      "parameters": {
+        "conditions": {
+          "conditions": [{ "leftValue": "={{ ($input.first().json?.data?.pending || 0) }}", "rightValue": 0, "operator": { "type": "number", "operation": "gt" } }]
+        }
+      }
+    },
+    {
+      "id": "t04",
+      "name": "Process Batch",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [760, 200],
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/processing/jobs",
+        "sendQuery": true,
+        "queryParameters": { "parameters": [{ "name": "batch", "value": "5" }] },
+        "options": {
+          "retry": { "enabled": true, "maxTries": 2, "waitBetweenTries": 5000 },
+          "response": { "response": { "neverError": true } }
+        }
+      }
+    },
+    {
+      "id": "t05",
+      "name": "Log Results",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [980, 200],
+      "parameters": {
+        "jsCode": "const res = $input.first().json;\nconst results = res?.data || [];\nconst ok = results.filter(r => r?.value?.success).length;\nconst fail = results.filter(r => !r?.value?.success).length;\nconsole.log(`[PROCESSING] batch done — success=${ok} failed=${fail}`);\nreturn [{ json: { ok, fail, total: results.length } }];"
+      }
+    },
+    {
+      "id": "t06",
+      "name": "No Pending",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [760, 420],
+      "parameters": {}
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": { "main": [[{ "node": "Check Queue Size", "type": "main", "index": 0 }]] },
+    "Check Queue Size": { "main": [[{ "node": "Has Pending Jobs?", "type": "main", "index": 0 }]] },
+    "Has Pending Jobs?": { "main": [
+      [{ "node": "Process Batch", "type": "main", "index": 0 }],
+      [{ "node": "No Pending",   "type": "main", "index": 0 }]
+    ]},
+    "Process Batch": { "main": [[{ "node": "Log Results", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "executionOrder": "v1", "errorWorkflow": "error-handler", "saveManualExecutions": true },
+  "active": false,
+  "_meta": {
+    "version": "1.0.0",
+    "description": "Polls processing queue every 15 minutes. Processes up to 5 articles per tick. Collectors never call AI — all AI work flows through here."
+  }
+}
