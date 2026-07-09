@@ -3,8 +3,8 @@ import { MOCK_REPOS }  from '@/data/mock/repos'
 import { MOCK_TOOLS }  from '@/data/mock/tools'
 import { MOCK_PAPERS } from '@/data/mock/papers'
 import { MOCK_OFFERS } from '@/data/mock/offers'
-import { CATEGORIES }  from '@/../../../config/categories.config'
-import { SOURCES }     from '@/../../../config/sources.config'
+import { CATEGORIES }  from '@/../../config/categories.config'
+import { SOURCES }     from '@/../../config/sources.config'
 
 // Lightweight mock categories/sources that mirror DB shape
 export const MOCK_CATEGORIES = CATEGORIES.map((c, i) => ({

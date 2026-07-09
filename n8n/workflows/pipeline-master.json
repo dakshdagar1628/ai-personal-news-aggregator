@@ -22,7 +22,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// \u2500\u2500 NORMALIZE (multi-format \u2014 handles RSS, GitHub, Reddit, HN, YouTube, GraphQL) \u2500\u2500\nfunction get(obj, ...keys) {\n  for (const k of keys) {\n    let v = obj;\n    for (const p of k.split('.')) { if (v == null) break; v = v[p]; }\n    if (v !== undefined && v !== null && String(v).trim() !== '') return v;\n  }\n  return null;\n}\nfunction normalizeUrl(u) {\n  if (!u) return '';\n  try { const x = new URL(String(u).trim()); ['utm_source','utm_medium','utm_campaign','ref'].forEach(p => x.searchParams.delete(p)); return x.href; } catch { return String(u).trim(); }\n}\nfunction normalizeDate(v) {\n  if (!v) return null;\n  if (typeof v === 'number') v = v > 9999999999 ? new Date(v) : new Date(v * 1000);\n  try { const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); } catch { return null; }\n}\nfunction normalizeTags(t) {\n  if (!t) return [];\n  const arr = Array.isArray(t) ? t : String(t).split(',');\n  return arr.map(s => {\n    const n = get(s, 'name') || String(s);\n    return String(n).trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9-]/g,'');\n  }).filter(s => s.length > 0 && s.length <= 50).slice(0, 20);\n}\nfunction normalizeTitle(raw) {\n  const t = get(raw, 'title._', 'title.#text', 'title', 'name', 'tag_name', 'subject');\n  return t ? String(t).trim().replace(/\\s+/g,' ').slice(0,500) : null;\n}\nfunction normalizeContent(raw) {\n  const c = get(raw, 'content:encoded', 'content_html', 'content', 'contentSnippet', 'body', 'description', 'selftext', 'text', 'summary');\n  return c ? String(c).slice(0, 50000) : null;\n}\n\nconst out = $input.all().map(item => {\n  const raw = item.json;\n  const ctx = raw._ctx || {};\n  const title = normalizeTitle(raw);\n  const url = normalizeUrl(get(raw, 'link', 'url', 'html_url', 'permalink_url', 'canonical_url') || '');\n  if (!title || !url) return null;\n  return { json: {\n    _ctx:         ctx,\n    title,\n    url,\n    source_slug:  ctx.source_slug || get(raw, 'source_slug') || '',\n    content_raw:  normalizeContent(raw),\n    author:       String(get(raw, 'creator', 'author', 'author.login', 'author.name', 'by', 'user.login', 'user.username') || '').slice(0,200) || null,\n    published_at: normalizeDate(get(raw, 'isoDate', 'pubDate', 'published_at', 'created_at', 'updated_at', 'created_utc', 'published', 'createdAt')),\n    tags:         normalizeTags(get(raw, 'categories', 'topics', 'tags', 'topics.edges') || []),\n    language:     'en',\n    category_hint:ctx.category_hint || '',\n    external_id:  String(get(raw, 'guid', 'id', 'full_name', 'external_id') || '').slice(0,200) || null,\n    metadata:     { source_type: ctx.source_type || 'unknown', guid: get(raw,'guid','id') },\n    collected_at: new Date().toISOString(),\n  }};\n}).filter(Boolean);\nconsole.log(`[NORMALIZE] in=${$input.all().length} out=${out.length}`);\nreturn out;"
+        "jsCode": "// ── NORMALIZE (multi-format — handles RSS, GitHub, Reddit, HN, YouTube, GraphQL) ──\nfunction isPrimitive(val) {\n  return val !== Object(val);\n}\nfunction get(obj, ...keys) {\n  for (const k of keys) {\n    let v = obj;\n    for (const p of k.split('.')) { if (v == null) break; v = v[p]; }\n    if (v === undefined || v === null) continue;\n    if (isPrimitive(v)) {\n      if (String(v).trim() !== '') return v;\n      continue;\n    }\n    if (Array.isArray(v)) return v;\n    if (v._ !== undefined && v._ !== null && isPrimitive(v._)) {\n      if (String(v._).trim() !== '') return v._;\n    }\n    if (v['#text'] !== undefined && v['#text'] !== null && isPrimitive(v['#text'])) {\n      if (String(v['#text']).trim() !== '') return v['#text'];\n    }\n  }\n  return null;\n}\nfunction normalizeUrl(u) {\n  if (!u) return '';\n  try { const x = new URL(String(u).trim()); ['utm_source','utm_medium','utm_campaign','ref'].forEach(p => x.searchParams.delete(p)); return x.href; } catch { return String(u).trim(); }\n}\nfunction normalizeDate(v) {\n  if (!v) return null;\n  if (typeof v === 'number') v = v > 9999999999 ? new Date(v) : new Date(v * 1000);\n  try { const d = new Date(v); return isNaN(d.getTime()) ? null : d.toISOString(); } catch { return null; }\n}\nfunction normalizeTags(t) {\n  if (!t) return [];\n  const arr = Array.isArray(t) ? t : String(t).split(',');\n  return arr.map(s => {\n    const n = get(s, 'name') || String(s);\n    return String(n).trim().toLowerCase().replace(/\\s+/g,'-').replace(/[^a-z0-9-]/g,'');\n  }).filter(s => s.length > 0 && s.length <= 50).slice(0, 20);\n}\nfunction normalizeTitle(raw) {\n  const t = get(raw, 'title._', 'title.#text', 'title', 'name', 'tag_name', 'subject');\n  return t ? String(t).trim().replace(/\\s+/g,' ').slice(0,500) : null;\n}\nfunction normalizeContent(raw) {\n  const c = get(raw, 'content:encoded', 'content_html', 'content', 'contentSnippet', 'body', 'description', 'selftext', 'text', 'summary');\n  return c ? String(c).slice(0, 50000) : null;\n}\n\nconst out = $input.all().map(item => {\n  const raw = item.json;\n  if (raw._empty) return null;\n  const ctx = raw._ctx || {};\n  const title = normalizeTitle(raw);\n  const url = normalizeUrl(get(raw, 'link', 'url', 'html_url', 'permalink_url', 'canonical_url') || '');\n  if (!title || !url) return null;\n  return { json: {\n    _ctx:         ctx,\n    title,\n    url,\n    source_slug:  ctx.source_slug || get(raw, 'source_slug') || '',\n    content_raw:  normalizeContent(raw),\n    author:       String(get(raw, 'creator', 'author', 'author.login', 'author.name', 'by', 'user.login', 'user.username') || '').slice(0,200) || null,\n    published_at: normalizeDate(get(raw, 'isoDate', 'pubDate', 'published_at', 'created_at', 'updated_at', 'created_utc', 'published', 'createdAt')),\n    tags:         normalizeTags(get(raw, 'categories', 'topics', 'tags', 'topics.edges') || []),\n    language:     'en',\n    category_hint:ctx.category_hint || '',\n    external_id:  String(get(raw, 'guid', 'id', 'full_name', 'external_id') || '').slice(0,200) || null,\n    metadata:     { source_type: ctx.source_type || 'unknown', guid: get(raw,'guid','id') },\n    collected_at: new Date().toISOString(),\n  }};\n}).filter(Boolean);\nconsole.log(`[NORMALIZE] in=${$input.all().length} out=${out.length}`);\nreturn out;"
       }
     },
     {
@@ -35,7 +35,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const REQUIRED = ['title','url','source_slug'];\nfunction validate(item) {\n  const errors = [];\n  for (const f of REQUIRED) { if (!item[f] || !String(item[f]).trim()) errors.push(f+':required'); }\n  if (item.url) { try { new URL(item.url); } catch { errors.push('url:invalid'); } }\n  if (!Array.isArray(item.tags)) errors.push('tags:must-be-array');\n  if (item.published_at) { const d = new Date(item.published_at); if (isNaN(d)) errors.push('published_at:invalid'); }\n  return errors;\n}\nconst valid = [], skipped = [];\nfor (const item of $input.all()) {\n  const e = validate(item.json);\n  if (e.length === 0) valid.push(item);\n  else { skipped.push(item.json.url || '?'); console.warn('[VALIDATE] rejected:', e.join(','), item.json.url); }\n}\nconsole.log(`[VALIDATE] valid=${valid.length} skipped=${skipped.length}`);\nreturn valid;"
+        "jsCode": "const REQUIRED = ['title','url','source_slug'];\nfunction validate(item) {\n  const errors = [];\n  for (const f of REQUIRED) { if (!item[f] || !String(item[f]).trim()) errors.push(f+':required'); }\n  if (item.url) { try { new URL(item.url); } catch { errors.push('url:invalid'); } }\n  if (!Array.isArray(item.tags)) errors.push('tags:must-be-array');\n  if (item.published_at) { const d = new Date(item.published_at); if (isNaN(d.getTime())) errors.push('published_at:invalid'); }\n  return errors;\n}\n\nconst items = $input.all();\nfor (const item of items) {\n  const errors = validate(item.json);\n  item.json.validation_errors = errors;\n  console.log('[DEBUG VALIDATE]', JSON.stringify({\n    title: item.json.title,\n    url: item.json.url,\n    published_at: item.json.published_at,\n    tags: item.json.tags,\n    validation_errors: errors\n  }));\n}\nreturn items;"
       }
     },
     {
@@ -62,7 +62,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/search",
+        "url": "=http://localhost:3000/api/search",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -73,6 +73,7 @@
           ]
         },
         "options": {
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true
@@ -129,17 +130,18 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/sources",
+        "url": "=http://localhost:3000/api/sources",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
             {
               "name": "slug",
-              "value": "={{ $('Execute Workflow Trigger').first().json._ctx.source_slug }}"
+              "value": "={{ $('Execute Workflow Trigger').first().json?._ctx?.source_slug || '' }}"
             }
           ]
         },
         "options": {
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true
@@ -158,7 +160,7 @@
         180
       ],
       "parameters": {
-        "jsCode": "const src = $('Resolve Source ID').first().json?.data;\nconst sourceId = src?.id ?? null;\nif (!sourceId) console.warn('[STORE] no source_id for slug:', $('Execute Workflow Trigger').first().json._ctx?.source_slug);\nreturn $('Filter Duplicates').all()\n  .filter(item => !!sourceId)\n  .map(item => {\n    const { _ctx, ...rest } = item.json;\n    return { json: {\n      source_id:            sourceId,\n      title:                rest.title,\n      url:                  rest.url,\n      content_raw:          rest.content_raw,\n      author:               rest.author,\n      published_at:         rest.published_at,\n      tags:                 rest.tags,\n      importance_score:     0.5,\n      external_id:          rest.external_id,\n      category_hint:        rest.category_hint,\n      estimated_read_time:  rest.estimated_read_time,\n      language:             rest.language,\n      raw_payload:          rest,\n      normalized_payload:   {\n        title: rest.title, url: rest.url, source_slug: rest.source_slug,\n        author: rest.author, published_at: rest.published_at, tags: rest.tags,\n        language: rest.language, content_raw: rest.content_raw,\n      },\n      metadata: {\n        ...(rest.metadata || {}),\n        url_hash: rest.url_hash,\n        fetched_at: rest.fetched_at,\n      },\n    }};\n  });"
+        "jsCode": "const src = $('Resolve Source ID').first().json?.data;\nconst sourceId = src?.id ?? null;\nif (!sourceId) console.warn('[STORE] no source_id for slug:', $('Execute Workflow Trigger').first().json?._ctx?.source_slug);\nreturn $('Filter Duplicates').all()\n  .filter(item => !!sourceId)\n  .map(item => {\n    const { _ctx, ...rest } = item.json;\n    return { json: {\n      source_id:            sourceId,\n      title:                rest.title,\n      url:                  rest.url,\n      content_raw:          rest.content_raw,\n      author:               rest.author,\n      published_at:         rest.published_at,\n      tags:                 rest.tags,\n      importance_score:     0.5,\n      external_id:          rest.external_id,\n      category_hint:        rest.category_hint,\n      estimated_read_time:  rest.estimated_read_time,\n      language:             rest.language,\n      raw_payload:          rest,\n      normalized_payload:   {\n        title: rest.title, url: rest.url, source_slug: rest.source_slug,\n        author: rest.author, published_at: rest.published_at, tags: rest.tags,\n        language: rest.language, content_raw: rest.content_raw,\n      },\n      metadata: {\n        ...(rest.metadata || {}),\n        url_hash: rest.url_hash,\n        fetched_at: rest.fetched_at,\n      },\n    }};\n  });"
       }
     },
     {
@@ -172,11 +174,12 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/news",
+        "url": "=http://localhost:3000/api/news",
         "sendBody": true,
         "contentType": "json",
         "body": "={{ JSON.stringify($json) }}",
         "options": {
+          "timeout": 15000,
           "retry": {
             "enabled": true,
             "maxTries": 3,
@@ -207,11 +210,11 @@
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2300,
+        2520,
         300
       ],
       "parameters": {
-        "jsCode": "const ctx          = $('Execute Workflow Trigger').first().json._ctx || {};\nconst fetched      = ($('Normalize Items').all().length + ($('Normalize Items').all().length > 0 ? 0 : 0));\nconst allRaw       = $('Execute Workflow Trigger').all().length;\nconst normalized   = $('Normalize Items').all().length;\nconst validated    = $('Validate Items').all().length;\nconst deduped      = $('Filter Duplicates').all().length;\nconst storeRes     = (() => { try { return $('Store Items').all(); } catch { return []; } })();\nconst stored       = storeRes.filter(r => r.json?.success === true).length;\nconst storeFailed  = storeRes.filter(r => r.json?.success === false).length;\n\nconst report = {\n  collector_id:     ctx.collector_id    || ctx.workflow_name || 'unknown',\n  collector_name:   ctx.collector_name  || ctx.workflow_name || 'unknown',\n  source_slug:      ctx.source_slug     || 'unknown',\n  run_id:           ctx.run_id          || 'unknown',\n  started_at:       ctx.started_at      || new Date().toISOString(),\n  finished_at:      new Date().toISOString(),\n  duration_ms:      ctx.started_at ? Date.now() - new Date(ctx.started_at).getTime() : 0,\n  status:           storeFailed > 0 ? 'partial' : 'success',\n  items_fetched:    allRaw,\n  items_validated:  validated,\n  items_stored:     stored,\n  items_duplicate:  validated - deduped,\n  items_skipped:    normalized - validated,\n  store_failures:   storeFailed,\n  version:          ctx.collector_version || '1.0.0',\n};\nconsole.log('[SUMMARY]', JSON.stringify(report));\nreturn [{ json: report }];"
+        "jsCode": "const triggerNode = $('Execute Workflow Trigger').first();\nconst ctx          = triggerNode ? triggerNode.json?._ctx || {} : {};\nconst isEmpty      = triggerNode ? !!triggerNode.json?._empty : true;\nconst allRaw       = isEmpty ? 0 : $('Execute Workflow Trigger').all().length;\nconst normalized   = $('Normalize Items').all().length;\nconst validated    = $('Validate Items').all().length;\nconst deduped      = $('Filter Duplicates').all().length;\nconst storeRes     = (() => { try { return $('Store Items').all(); } catch { return []; } })();\nconst stored       = storeRes.filter(r => r.json?.success === true && r.json?.data !== null).length;\nconst duplicates   = storeRes.filter(r => r.json?.success === true && r.json?.data === null).length;\nconst storeFailed  = storeRes.filter(r => r.json?.success === false).length;\n\nconst report = {\n  collector_id:     ctx.collector_id    || ctx.workflow_name || 'unknown',\n  collector_name:   ctx.collector_name  || ctx.workflow_name || 'unknown',\n  source_slug:      ctx.source_slug     || 'unknown',\n  run_id:           ctx.run_id          || 'unknown',\n  started_at:       ctx.started_at      || new Date().toISOString(),\n  finished_at:      new Date().toISOString(),\n  duration_ms:      ctx.started_at ? Date.now() - new Date(ctx.started_at).getTime() : 0,\n  status:           storeFailed > 0 ? 'partial' : 'success',\n  items_fetched:    allRaw,\n  items_validated:  validated,\n  items_stored:     stored,\n  items_duplicate:  (validated - deduped) + duplicates,\n  items_skipped:    normalized - validated,\n  store_failures:   storeFailed,\n  version:          ctx.collector_version || '1.0.0',\n};\nconsole.log('[SUMMARY]', JSON.stringify(report));\nreturn [{ json: report }];"
       }
     },
     {
@@ -220,16 +223,17 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2520,
+        2740,
         300
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/collector-health",
+        "url": "=http://localhost:3000/api/collector-health",
         "sendBody": true,
         "contentType": "json",
         "body": "={{ JSON.stringify({\n  collector_id:         $json.collector_id,\n  collector_name:       $json.collector_name,\n  status:               $json.status,\n  last_run_at:          $json.finished_at,\n  last_run_duration_ms: $json.duration_ms,\n  items_fetched:        $json.items_fetched,\n  items_stored:         $json.items_stored,\n  items_duplicate:      $json.items_duplicate,\n  items_skipped:        $json.items_skipped,\n  store_failures:       $json.store_failures,\n  current_version:      $json.version,\n}) }}",
         "options": {
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true
@@ -244,16 +248,17 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2740,
+        2960,
         300
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/collector-runs",
+        "url": "=http://localhost:3000/api/collector-runs",
         "sendBody": true,
         "contentType": "json",
         "body": "={{ JSON.stringify($('Execution Summary').first().json) }}",
         "options": {
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true
@@ -268,16 +273,17 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
       "position": [
-        2960,
-        300
+        2300,
+        180
       ],
       "parameters": {
         "method": "POST",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/processing/queue",
+        "url": "=http://localhost:3000/api/processing/queue",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify({ news_id: $json.news_id || null }) }}",
+        "body": "={{ JSON.stringify({ news_id: $json.data?.id || null }) }}",
         "options": {
+          "timeout": 10000,
           "response": {
             "response": {
               "neverError": true
@@ -398,7 +404,7 @@
       "main": [
         [
           {
-            "node": "Execution Summary",
+            "node": "Enqueue for AI Processing",
             "type": "main",
             "index": 0
           }
@@ -440,9 +446,14 @@
     },
     "Record Run": {
       "main": [
+        []
+      ]
+    },
+    "Enqueue for AI Processing": {
+      "main": [
         [
           {
-            "node": "Enqueue for AI Processing",
+            "node": "Execution Summary",
             "type": "main",
             "index": 0
           }

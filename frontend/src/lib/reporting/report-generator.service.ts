@@ -38,7 +38,7 @@ export async function generateDailyReport(date?: string): Promise<DailyReport> {
       recommended_action, action_explanation, action_details,
       related_items, semantic_group_id, language, processed_at,
       news!inner(id, title, url, author, published_at, source_id, estimated_read_time,
-                 metadata->>'source_slug' as source_slug)
+                 source_slug:metadata->>source_slug)
     `)
     .gte('processed_at', dayStart)
     .lte('processed_at', dayEnd)
@@ -48,10 +48,10 @@ export async function generateDailyReport(date?: string): Promise<DailyReport> {
   if (error) throw error;
 
   // Flatten join
-  const articles = (processed ?? []).map((p: Record<string, unknown>) => {
-    const n = p.news as Record<string, unknown> ?? {};
+  const articles = (processed ?? []).map((p: any) => {
+    const n = p.news ?? {};
     return { ...p, title: n.title, url: n.url, estimated_read_time: n.estimated_read_time, source_slug: n.source_slug };
-  });
+  }) as any[];
 
   if (!articles.length) {
     await db.from('daily_reports').update({ status: 'ready', total_items: 0 }).eq('report_date', reportDate);
@@ -69,7 +69,7 @@ export async function generateDailyReport(date?: string): Promise<DailyReport> {
   const stats        = buildStatistics(articles, start);
   const tutorials    = articles
     .filter(a => (a.categories ?? []).some((c: string) => ['tutorial','video'].includes(c)))
-    .sort((a: {learning_score?:number}, b: {learning_score?:number}) => (b.learning_score ?? 0) - (a.learning_score ?? 0))
+    .sort((a: any, b: any) => (b.learning_score ?? 0) - (a.learning_score ?? 0))
     .slice(0, 8).map((a: {news_id:string;title?:string;url?:string;summary_short?:string;recommended_action?:string;estimated_read_time?:number;related_items?:string[];importance_score?:number;developer_score?:number;primary_category?:string;score_explanations?:Record<string,string>}) => ({
       news_id: a.news_id, title: a.title ?? '', url: a.url ?? '', summary: a.summary_short ?? '',
       importance_score: a.importance_score ?? 50, developer_score: a.developer_score ?? 50,
@@ -98,7 +98,7 @@ export async function generateDailyReport(date?: string): Promise<DailyReport> {
     ai.completeJSON(renderPrompt('report-learn', {
       technologies: stats.top_technologies.slice(0,5).join(', '),
       categories: topCategoriesText,
-      top_learning_article: articles.sort((a: {learning_score?:number}, b: {learning_score?:number}) => (b.learning_score ?? 0) - (a.learning_score ?? 0))[0]?.title ?? '',
+      top_learning_article: articles.sort((a: any, b: any) => (b.learning_score ?? 0) - (a.learning_score ?? 0))[0]?.title ?? '',
     }).text, { maxTokens: 384, temperature: 0.3 }),
   ]);
 
@@ -118,19 +118,19 @@ export async function generateDailyReport(date?: string): Promise<DailyReport> {
     status:              'ready',
     version:             1,
     prompt_version:      REPORT_PROMPT_VERSION,
-    top_stories:         JSON.stringify(topStories),
-    ai_company_updates:  JSON.stringify(companies),
-    github_highlights:   JSON.stringify(github),
-    tools:               JSON.stringify([]),
-    research_papers:     JSON.stringify(research),
-    tutorials:           JSON.stringify(tutorials),
-    opportunities:       JSON.stringify(opportunities),
-    learn_today:         JSON.stringify(learn),
-    action_center:       JSON.stringify(actions),
-    trends:              JSON.stringify(trends),
-    events:              JSON.stringify(events),
-    statistics:          JSON.stringify(stats),
-    sections:            JSON.stringify({ key_themes: exec.key_themes }),
+    top_stories:         topStories,
+    ai_company_updates:  companies,
+    github_highlights:   github,
+    tools:               [],
+    research_papers:     research,
+    tutorials:           tutorials,
+    opportunities:       opportunities,
+    learn_today:         learn,
+    action_center:       actions,
+    trends:              trends,
+    events:              events,
+    statistics:          stats,
+    sections:            { key_themes: exec.key_themes },
     estimated_read_min,
     sources_count:       stats.sources_count,
     articles_count:      articles.length,

@@ -14,7 +14,7 @@ export const createReportSchema = z.object({
   title:               z.string().min(1).max(300),
   summary:             z.string().max(5000).optional().nullable(),
   top_stories:         z.array(topStorySchema).max(10).optional().nullable(),
-  content_by_category: z.record(z.array(topStorySchema)).optional().nullable(),
+  content_by_category: z.record(z.string(), z.array(topStorySchema)).optional().nullable(),
   total_items:         z.number().int().min(0).default(0),
   processed_items:     z.number().int().min(0).default(0),
   status:              z.enum(['draft','generating','ready','failed']).default('draft'),

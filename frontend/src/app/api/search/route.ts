@@ -3,6 +3,8 @@ import { newsService } from '@/lib/database/news.service'
 import { ok, fail } from '@/lib/api/response'
 import { logger } from '@/lib/logging/logger'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url)

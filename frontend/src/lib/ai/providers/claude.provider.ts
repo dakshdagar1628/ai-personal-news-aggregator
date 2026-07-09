@@ -8,7 +8,7 @@ export class ClaudeProvider implements AIProvider {
 
   constructor(apiKey?: string, model?: string) {
     this.client = new Anthropic({ apiKey: apiKey ?? process.env.ANTHROPIC_API_KEY });
-    this.model = model ?? process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
+    this.model = model ?? process.env.CLAUDE_MODEL ?? 'claude-3-5-sonnet-latest';
   }
 
   async complete(prompt: string, opts: AIRequestOptions = {}): Promise<AIResponse> {

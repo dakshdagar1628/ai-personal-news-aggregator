@@ -1,15 +1,29 @@
-import { fetchAPI } from '@/lib/dashboard/fetcher'
+import { reportsService } from '@/lib/database/reports.service'
+import { generateDailyReport } from '@/lib/reporting/report-generator.service'
+import { isSupabaseConfigured, getServerClient } from '@/lib/database/client'
 import { InsightPanel } from '@/components/intelligence/InsightPanel'
 import { MetricCard } from '@/components/intelligence/MetricCard'
 import { FileText, ExternalLink } from 'lucide-react'
 import Link from 'next/link'
 export const revalidate = 300;
 export default async function ReportsPage() {
-  const [today, history] = await Promise.all([
-    fetchAPI<Record<string,unknown>>('/api/reports/today'),
-    fetchAPI<Record<string,unknown>[]>('/api/reports/history?limit=30'),
-  ]);
-  const reports = Array.isArray(history) ? history : [];
+  const todayDate = new Date().toISOString().slice(0, 10);
+  let today = null;
+  if (isSupabaseConfigured()) {
+    const db = getServerClient();
+    const { data } = await db.from('daily_reports')
+      .select('*').eq('report_date', todayDate).eq('status', 'ready').single();
+    today = data;
+  }
+  if (!today) {
+    try {
+      today = await generateDailyReport(todayDate);
+    } catch (e) {
+      console.error("Failed to generate/fetch today's report", e);
+    }
+  }
+
+  const reports = await reportsService.getReports(30);
   return (
     <div className="space-y-6">
       <div><h1 className="text-2xl font-bold">Daily Reports</h1>

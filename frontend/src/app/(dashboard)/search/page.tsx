@@ -2,7 +2,7 @@
 import { useState, useCallback } from 'react'
 import { Search, ExternalLink } from 'lucide-react'
 import { InsightPanel } from '@/components/intelligence/InsightPanel'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/common/Badge'
 
 interface SearchResult { id:string; title:string; url:string; content_summary?:string; published_at?:string; importance_score?:number; }
 
@@ -40,7 +40,7 @@ export default function SearchPage() {
       {(searched || results.length > 0) && (
         <InsightPanel title={loading ? 'Searching…' : `${results.length} results`} icon={Search}>
           {loading && <div className="py-8 text-center text-sm text-muted-foreground">Searching…</div>}
-          {!loading && results.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">No results found for "{query}"</div>}
+          {!loading && results.length === 0 && <div className="py-8 text-center text-sm text-muted-foreground">No results found for &quot;{query}&quot;</div>}
           <div className="space-y-2">
             {results.map(r=>(
               <div key={r.id} className="flex gap-3 py-2.5 border-b border-border/40 last:border-0 items-start">

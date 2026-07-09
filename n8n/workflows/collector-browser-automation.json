@@ -59,7 +59,7 @@
             },
             {
               "name": "Authorization",
-              "value": "token {{ $env.GITHUB_TOKEN }}"
+              "value": "token {{ $vars.GITHUB_TOKEN }}"
             }
           ]
         },
@@ -95,7 +95,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nreturn $input.all().map(item => ({ json: { ...item.json, _ctx: ctx } }));"
+        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nconst items = $input.all();\nif (items.length === 0) {\n  return [{ json: { _ctx: ctx, _empty: true } }];\n}\nreturn items.map(item => ({ json: { ...item.json, _ctx: ctx } }));"
       }
     },
     {
@@ -109,7 +109,7 @@
       ],
       "parameters": {
         "source": "database",
-        "workflowId": "={{ $env.PIPELINE_MASTER_WORKFLOW_ID || 'CONFIGURE_AFTER_IMPORT' }}"
+        "workflowId": "CONFIGURE_AFTER_IMPORT"
       }
     }
   ],

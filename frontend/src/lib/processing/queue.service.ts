@@ -47,14 +47,20 @@ export async function requeueFailed(newsId?: string): Promise<number> {
 export async function getQueueStats() {
   if (!isSupabaseConfigured()) return MOCK_STATS;
   const db = getServerClient();
-  const { data } = await db.from('processing_queue')
-    .select('status')
-    .then(r => r);
-  const counts = (data ?? []).reduce<Record<string, number>>((acc, row) => {
-    acc[row.status] = (acc[row.status] ?? 0) + 1;
+  const statuses = ['pending', 'processing', 'completed', 'failed', 'retrying', 'skipped'];
+  const counts = await Promise.all(
+    statuses.map(async status => {
+      const { count } = await db
+        .from('processing_queue')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', status);
+      return { status, count: count ?? 0 };
+    })
+  );
+  return counts.reduce<Record<string, number>>((acc, c) => {
+    acc[c.status] = c.count;
     return acc;
   }, {});
-  return counts;
 }
 
 const MOCK_STATS = { pending: 0, processing: 0, completed: 0, failed: 0, retrying: 0, skipped: 0 };

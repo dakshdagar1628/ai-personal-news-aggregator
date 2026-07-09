@@ -12,7 +12,7 @@ export const createNewsSchema = z.object({
   published_at:    z.string().datetime().optional().nullable(),
   importance_score:scoreSchema.optional().nullable(),
   tags:            tagsSchema,
-  metadata:        z.record(z.unknown()).optional().nullable(),
+  metadata:        z.record(z.string(), z.unknown()).optional().nullable(),
 })
 
 export const updateNewsSchema = createNewsSchema.partial().extend({
@@ -33,7 +33,7 @@ export const searchNewsSchema = z.object({
   featured:    z.coerce.boolean().optional(),
   processed:   z.coerce.boolean().optional(),
   page:        z.coerce.number().min(1).default(1),
-  pageSize:    z.coerce.number().min(1).max(100).default(20),
+  pageSize:    z.coerce.number().min(1).max(500).default(20),
   sortBy:      z.enum(['published_at','collected_at','importance_score','created_at']).default('collected_at'),
   sortDir:     z.enum(['asc','desc']).default('desc'),
 })

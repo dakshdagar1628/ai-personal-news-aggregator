@@ -19,7 +19,7 @@ const upsertSchema = z.object({
   store_failures:         z.number().int().default(0),
   last_error_message:     z.string().nullable().optional(),
   current_version:        z.string().default('1.0.0'),
-  metadata:               z.record(z.unknown()).optional(),
+  metadata:               z.record(z.string(), z.unknown()).optional(),
 });
 
 export async function GET() {

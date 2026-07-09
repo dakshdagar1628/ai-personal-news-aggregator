@@ -6,22 +6,22 @@ import { z } from 'zod';
 
 const createSchema = z.object({
   source_id:            z.string().uuid(),
-  category_id:          z.string().uuid().optional(),
+  category_id:          z.string().uuid().optional().nullable(),
   title:                z.string().min(1).max(500),
   url:                  z.string().url(),
-  content_raw:          z.string().max(50000).optional(),
-  content_summary:      z.string().max(5000).optional(),
-  author:               z.string().max(200).optional(),
-  published_at:         z.string().optional(),
+  content_raw:          z.string().max(50000).optional().nullable(),
+  content_summary:      z.string().max(5000).optional().nullable(),
+  author:               z.string().max(200).optional().nullable(),
+  published_at:         z.string().optional().nullable(),
   importance_score:     z.number().min(0).max(1).default(0.5),
   tags:                 z.array(z.string()).default([]),
-  external_id:          z.string().max(200).optional(),
-  category_hint:        z.string().optional(),
-  estimated_read_time:  z.number().int().optional(),
+  external_id:          z.string().max(200).optional().nullable(),
+  category_hint:        z.string().optional().nullable(),
+  estimated_read_time:  z.number().int().optional().nullable(),
   language:             z.string().default('en'),
-  raw_payload:          z.record(z.unknown()).optional(),
-  normalized_payload:   z.record(z.unknown()).optional(),
-  metadata:             z.record(z.unknown()).optional(),
+  raw_payload:          z.record(z.string(), z.unknown()).optional().nullable(),
+  normalized_payload:   z.record(z.string(), z.unknown()).optional().nullable(),
+  metadata:             z.record(z.string(), z.unknown()).optional().nullable(),
 });
 
 export async function GET(req: NextRequest) {

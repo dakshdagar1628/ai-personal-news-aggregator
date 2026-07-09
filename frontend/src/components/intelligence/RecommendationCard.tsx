@@ -1,5 +1,5 @@
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/common/Badge'
 import { ExternalLink } from 'lucide-react'
 
 interface RecommendationCardProps {

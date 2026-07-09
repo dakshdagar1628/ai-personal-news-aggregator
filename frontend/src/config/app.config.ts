@@ -7,8 +7,9 @@ export const APP_CONFIG = {
 export const PAGINATION = { defaultPageSize: 20, maxPageSize: 100 } as const
 
 export const AI_MODELS = {
-  primary:   process.env.CLAUDE_MODEL   ?? 'claude-opus-4-5',
-  secondary: process.env.OPENAI_MODEL   ?? 'gpt-4o',
+  primary:   process.env.CLAUDE_MODEL      ?? 'claude-3-5-sonnet-latest',
+  secondary: process.env.OPENAI_MODEL      ?? 'gpt-4o',
+  openrouter:process.env.OPENROUTER_MODEL  ?? 'google/gemini-2.5-flash',
 } as const
 
 export const FEATURE_FLAGS = {

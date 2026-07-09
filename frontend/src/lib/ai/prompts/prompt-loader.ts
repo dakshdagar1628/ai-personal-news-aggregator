@@ -10,10 +10,10 @@ export function loadPrompt(name: string): LoadedPrompt {
   if (cache.has(name)) return cache.get(name)!;
   const filePath = path.join(process.cwd(), 'src/lib/ai/prompts', `${name}.md`);
   const raw = fs.readFileSync(filePath, 'utf-8');
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  const match = raw.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   if (!match) throw new Error(`Invalid prompt format: ${name}`);
   const meta: Record<string, string | number> = {};
-  for (const line of match[1].split('\n')) {
+  for (const line of match[1].split(/\r?\n/)) {
     const [k, ...v] = line.split(':');
     if (k && v.length) {
       const val = v.join(':').trim().replace(/^"|"$/g, '');

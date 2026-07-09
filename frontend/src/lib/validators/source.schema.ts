@@ -8,7 +8,7 @@ export const createSourceSchema = z.object({
   url:                    urlSchema,
   is_active:              z.boolean().default(true),
   check_interval_minutes: z.number().int().min(5).max(1440).default(60),
-  metadata:               z.record(z.unknown()).optional().nullable(),
+  metadata:               z.record(z.string(), z.unknown()).optional().nullable(),
 })
 
 export const updateSourceSchema = createSourceSchema.partial().extend({

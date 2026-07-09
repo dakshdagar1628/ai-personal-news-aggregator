@@ -17,7 +17,7 @@
       "position": [320, 300],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/processing/queue?action=stats",
+        "url": "=http://localhost:3000/api/processing/queue?action=stats",
         "options": { "response": { "response": { "neverError": true } } }
       }
     },
@@ -41,7 +41,7 @@
       "position": [760, 200],
       "parameters": {
         "method": "GET",
-        "url": "={{ $env.APP_URL || 'http://localhost:3000' }}/api/processing/jobs",
+        "url": "=http://localhost:3000/api/processing/jobs",
         "sendQuery": true,
         "queryParameters": { "parameters": [{ "name": "batch", "value": "5" }] },
         "options": {

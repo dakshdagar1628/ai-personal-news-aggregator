@@ -12,4 +12,4 @@ export async function GET() {
     return ok(data ?? []);
   } catch (e) { return fail(e); }
 }
-const MOCK = [];
+const MOCK: any[] = [];

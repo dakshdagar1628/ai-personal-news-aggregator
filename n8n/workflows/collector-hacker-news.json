@@ -65,7 +65,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "// HN returns array of IDs \u2014 fetch top 15 details\nconst ids = ($input.first().json || []).slice(0, 15);\nconsole.log(`[FETCH] fetching ${ids.length} HN items`);\nreturn ids.map(id => ({ json: { _hn_id: id, url: `https://news.ycombinator.com/item?id=${id}`, title: `HN Story ${id}`, published_at: new Date().toISOString() } }));"
+        "jsCode": "// HN returns array of IDs — fetch top 15 details\nconst ids = ($input.first().json || []).slice(0, 15);\nconsole.log(`[FETCH] fetching ${ids.length} HN items`);\nreturn ids.map(id => ({ json: { _hn_id: id, url: `https://news.ycombinator.com/item?id=${id}`, title: `HN Story ${id}`, published_at: new Date().toISOString() } }));"
       }
     },
     {
@@ -78,7 +78,7 @@
         300
       ],
       "parameters": {
-        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nreturn $input.all().map(item => ({ json: { ...item.json, _ctx: ctx } }));"
+        "jsCode": "const ctx = $('Set Context').first().json._ctx;\nconst items = $input.all();\nif (items.length === 0) {\n  return [{ json: { _ctx: ctx, _empty: true } }];\n}\nreturn items.map(item => ({ json: { ...item.json, _ctx: ctx } }));"
       }
     },
     {
@@ -92,7 +92,7 @@
       ],
       "parameters": {
         "source": "database",
-        "workflowId": "={{ $env.PIPELINE_MASTER_WORKFLOW_ID || 'CONFIGURE_AFTER_IMPORT' }}"
+        "workflowId": "CONFIGURE_AFTER_IMPORT"
       }
     }
   ],

@@ -32,9 +32,7 @@ export async function processArticle(newsId: string): Promise<ProcessingResult> 
   const db = getServerClient();
 
   // Mark queue as processing
-  await db.from('processing_queue')
-    .update({ status: 'processing', started_at: new Date().toISOString(), attempts: db.rpc('increment', {}) as unknown as number })
-    .eq('news_id', newsId).eq('status', 'pending');
+  await db.rpc('start_processing_job', { p_news_id: newsId });
 
   try {
     // 1. Fetch raw article
@@ -101,7 +99,7 @@ export async function processArticle(newsId: string): Promise<ProcessingResult> 
       summary_medium:       summary.summary_medium,
       summary_long:         summary.summary_long,
       executive_summary:    summary.executive_summary,
-      bullet_summary:       JSON.stringify(summary.bullet_summary),
+      bullet_summary:       summary.bullet_summary,
       categories,
       primary_category,
       tags_primary:         keywords.tags_primary,
@@ -120,10 +118,10 @@ export async function processArticle(newsId: string): Promise<ProcessingResult> 
       urgency_score:        scores.urgency_score,
       innovation_score:     scores.innovation_score,
       confidence_score:     scores.confidence_score,
-      score_explanations:   JSON.stringify(scores.score_explanations),
+      score_explanations:   scores.score_explanations,
       recommended_action:   recommendation.recommended_action,
       action_explanation:   recommendation.action_explanation,
-      action_details:       JSON.stringify(recommendation.action_details),
+      action_details:       recommendation.action_details,
       related_items:        relatedIds,
       semantic_group_id:    semanticGroupId,
       language,
@@ -153,10 +151,32 @@ export async function processArticle(newsId: string): Promise<ProcessingResult> 
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     logger.error(`Processing failed for ${newsId}: ${msg}`);
-    await db.from('processing_queue').update({
-      status: 'failed', failed_at: new Date().toISOString(),
-      error_message: msg.slice(0, 1000),
-    }).eq('news_id', newsId);
+    
+    // Check attempts to schedule retry or fail
+    const { data: job } = await db.from('processing_queue')
+      .select('attempts, max_attempts')
+      .eq('news_id', newsId)
+      .single();
+      
+    const attempts = job?.attempts ?? 1;
+    const maxAttempts = job?.max_attempts ?? 3;
+    
+    if (attempts < maxAttempts) {
+      const delayMinutes = Math.pow(2, attempts);
+      const nextRetry = new Date(Date.now() + delayMinutes * 60 * 1000).toISOString();
+      await db.from('processing_queue').update({
+        status: 'retrying',
+        next_retry_at: nextRetry,
+        error_message: msg.slice(0, 1000),
+      }).eq('news_id', newsId);
+    } else {
+      await db.from('processing_queue').update({
+        status: 'failed',
+        failed_at: new Date().toISOString(),
+        error_message: msg.slice(0, 1000),
+      }).eq('news_id', newsId);
+    }
+    
     return { success: false, newsId, error: msg, tokensUsed: totalTokens, processingMs: Date.now() - start };
   }
 }

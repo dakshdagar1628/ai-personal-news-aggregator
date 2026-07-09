@@ -1,4 +1,4 @@
-import { fetchAPI } from '@/lib/dashboard/fetcher'
+import { getServerClient, isSupabaseConfigured } from '@/lib/database/client'
 import { InsightPanel } from '@/components/intelligence/InsightPanel'
 import { MetricCard } from '@/components/intelligence/MetricCard'
 import { EventCard } from '@/components/intelligence/EventCard'
@@ -12,20 +12,42 @@ import Link from 'next/link'
 export const revalidate = 300;
 
 export default async function DashboardHome() {
-  const [dash, trends, recs] = await Promise.all([
-    fetchAPI<Record<string,unknown>>('/api/dashboard'),
-    fetchAPI<Record<string,{name:string,count:number}[]>>('/api/trends'),
-    fetchAPI<unknown[]>('/api/recommendations'),
-  ]);
+  let report: any = null;
+  let queue: Record<string, number> = { pending: 0, completed: 0, failed: 0 };
+  let health: any[] = [];
+  let recs: any[] = [];
+  let topCats: any[] = [];
 
-  const report   = dash?.report  as Record<string,unknown> | null;
-  const queue    = (dash?.queue  as Record<string,number>) ?? {};
-  const health   = (dash?.health as Record<string,unknown>[]) ?? [];
-  const topCats  = (trends?.categories ?? []).slice(0,6);
-  const maxCat   = topCats[0]?.count ?? 1;
-  const topRecs  = (recs ?? []).slice(0,6) as Record<string,unknown>[];
+  if (isSupabaseConfigured()) {
+    const db = getServerClient();
+    const today = new Date().toISOString().slice(0, 10);
+    const [reportRes, queueRes, healthRes, recsRes, processedRes] = await Promise.allSettled([
+      db.from('daily_reports').select('id,report_date,title,summary,total_items,status,estimated_read_min,statistics,top_stories,learn_today,action_center,trends').eq('report_date', today).single(),
+      db.from('processing_queue').select('status'),
+      db.from('collector_health').select('collector_id,collector_name,status,total_items_stored,last_run_at,successful_runs,failed_runs').order('total_items_stored', { ascending: false }).limit(8),
+      db.from('processed_articles').select('news_id,recommended_action,action_explanation,importance_score,developer_score,categories,news!inner(title,url)').neq('recommended_action', 'should_ignore').neq('recommended_action', null).order('importance_score', { ascending: false }).limit(20),
+      db.from('processed_articles').select('categories').gte('processed_at', new Date(Date.now() - 7*24*60*60*1000).toISOString()).limit(500),
+    ]);
 
-  const stats = report?.statistics as Record<string,number> | null;
+    report = reportRes.status === 'fulfilled' ? reportRes.value.data : null;
+    const queueRows = queueRes.status === 'fulfilled' ? queueRes.value.data ?? [] : [];
+    queue = queueRows.reduce<Record<string, number>>((a, r) => {
+      a[r.status] = (a[r.status] ?? 0) + 1;
+      return a;
+    }, {});
+    health = healthRes.status === 'fulfilled' ? healthRes.value.data ?? [] : [];
+    recs = recsRes.status === 'fulfilled' ? recsRes.value.data ?? [] : [];
+
+    const processedData = processedRes.status === 'fulfilled' ? processedRes.value.data ?? [] : [];
+    const count = (arr: string[]) => arr.reduce<Record<string, number>>((a, v) => { a[v] = (a[v] ?? 0) + 1; return a; }, {});
+    const top = (obj: Record<string, number>, n = 10) => Object.entries(obj).sort(([, a], [, b]) => b - a).slice(0, n).map(([k, v]) => ({ name: k, count: v }));
+    const allCats = processedData.flatMap(r => r.categories ?? []);
+    topCats = top(count(allCats));
+  }
+
+  const maxCat = topCats[0]?.count ?? 1;
+  const topRecs = recs.slice(0, 6) as any[];
+  const stats = report?.statistics as any;
 
   return (
     <div className="space-y-6">

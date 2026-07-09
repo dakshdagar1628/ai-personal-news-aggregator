@@ -1,6 +1,6 @@
 'use client'
 import { cn } from '@/lib/utils'
-import { Badge } from '@/components/ui/badge'
+import { Badge } from '@/components/common/Badge'
 import { ExternalLink, Layers } from 'lucide-react'
 
 interface EventCardProps {

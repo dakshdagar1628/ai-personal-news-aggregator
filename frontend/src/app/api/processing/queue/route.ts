@@ -13,7 +13,9 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => ({})) as { news_id?: string; priority?: number };
-  if (!body.news_id) return fail(new Error('news_id required'));
+  if (!body.news_id) {
+    return ok(null, 'No news_id provided - skipped enqueuing');
+  }
   try {
     await enqueueArticle(body.news_id, body.priority ?? 5);
     return created({ news_id: body.news_id }, 'Enqueued');

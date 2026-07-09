@@ -1,7 +1,11 @@
-import { createHash } from 'crypto'
-
 export function urlHash(url: string): string {
-  return createHash('sha256').update(url.trim().toLowerCase()).digest('hex').slice(0, 16)
+  const s = url.trim().toLowerCase();
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = (h * 16777619) >>> 0;
+  }
+  return h.toString(16).padStart(8, '0');
 }
 
 export function slugify(text: string): string {
