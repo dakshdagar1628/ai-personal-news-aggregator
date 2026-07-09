@@ -35,9 +35,22 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  try {
+    const rawText = await req.clone().text();
+    console.log('[DEBUG POST NEWS] Headers:', Object.fromEntries(req.headers.entries()));
+    console.log('[DEBUG POST NEWS] Raw Body:', rawText);
+  } catch (err) {
+    console.error('[DEBUG POST NEWS] Error reading raw text:', err);
+  }
+
   const body = await req.json().catch(() => ({}));
+  console.log('[DEBUG POST NEWS] Parsed Body:', body);
+
   const parsed = createSchema.safeParse(body);
-  if (!parsed.success) return fail(parsed.error);
+  if (!parsed.success) {
+    console.log('[DEBUG POST NEWS] Validation Errors:', parsed.error.format());
+    return fail(parsed.error);
+  }
   try {
     const item = await newsService.createNews(parsed.data as Parameters<typeof newsService.createNews>[0]);
     if (!item) return ok(null, 'Duplicate — skipped');

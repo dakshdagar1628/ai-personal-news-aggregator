@@ -62,7 +62,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "=http://localhost:3000/api/search",
+        "url": "http://localhost:3000/api/search",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -130,7 +130,7 @@
       ],
       "parameters": {
         "method": "GET",
-        "url": "=http://localhost:3000/api/sources",
+        "url": "http://localhost:3000/api/sources",
         "sendQuery": true,
         "queryParameters": {
           "parameters": [
@@ -174,10 +174,12 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:3000/api/news",
+        "url": "http://localhost:3000/api/news",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify($json) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "bodyParameters": {},
         "options": {
           "timeout": 15000,
           "retry": {
@@ -228,10 +230,12 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:3000/api/collector-health",
+        "url": "http://localhost:3000/api/collector-health",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify({\n  collector_id:         $json.collector_id,\n  collector_name:       $json.collector_name,\n  status:               $json.status,\n  last_run_at:          $json.finished_at,\n  last_run_duration_ms: $json.duration_ms,\n  items_fetched:        $json.items_fetched,\n  items_stored:         $json.items_stored,\n  items_duplicate:      $json.items_duplicate,\n  items_skipped:        $json.items_skipped,\n  store_failures:       $json.store_failures,\n  current_version:      $json.version,\n}) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ { collector_id: $json.collector_id, collector_name: $json.collector_name, status: $json.status, last_run_at: $json.finished_at, last_run_duration_ms: $json.duration_ms, items_fetched: $json.items_fetched, items_stored: $json.items_stored, items_duplicate: $json.items_duplicate, items_skipped: $json.items_skipped, store_failures: $json.store_failures, current_version: $json.version } }}",
+        "bodyParameters": {},
         "options": {
           "timeout": 10000,
           "response": {
@@ -253,10 +257,12 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:3000/api/collector-runs",
+        "url": "http://localhost:3000/api/collector-runs",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify($('Execution Summary').first().json) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ $('Execution Summary').first().json }}",
+        "bodyParameters": {},
         "options": {
           "timeout": 10000,
           "response": {
@@ -278,10 +284,12 @@
       ],
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:3000/api/processing/queue",
+        "url": "http://localhost:3000/api/processing/queue",
         "sendBody": true,
         "contentType": "json",
-        "body": "={{ JSON.stringify({ news_id: $json.data?.id || null }) }}",
+        "specifyBody": "json",
+        "jsonBody": "={{ { news_id: $json.data?.id || null } }}",
+        "bodyParameters": {},
         "options": {
           "timeout": 10000,
           "response": {

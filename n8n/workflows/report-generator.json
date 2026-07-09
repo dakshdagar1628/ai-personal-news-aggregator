@@ -16,9 +16,12 @@
       "type": "n8n-nodes-base.httpRequest", "typeVersion": 4.1, "position": [540, 300],
       "parameters": {
         "method": "POST",
-        "url": "=http://localhost:3000/api/reports/regenerate",
-        "sendBody": true, "contentType": "json",
-        "body": "={{ JSON.stringify({ date: $json.date }) }}",
+        "url": "http://localhost:3000/api/reports/regenerate",
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ { date: $json.date } }}",
+        "bodyParameters": {},
         "options": { "timeout": 300000, "retry": { "enabled": true, "maxTries": 2, "waitBetweenTries": 10000 }, "response": { "response": { "neverError": true } } }
       }
     },

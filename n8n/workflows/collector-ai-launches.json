@@ -61,7 +61,9 @@
         },
         "sendBody": true,
         "contentType": "json",
-        "body": "{\"query\": \"{ posts(first: 20, order: NEWEST, postedAfter: \\\\\\\"2024-01-01\\\\\\\", topic: \\\\\\\"artificial-intelligence\\\\\\\") { edges { node { id name tagline url votesCount createdAt thumbnail { url } } } } }\"}",
+        "specifyBody": "json",
+        "jsonBody": "{\"query\": \"{ posts(first: 20, order: NEWEST, postedAfter: \\\\\\\"2024-01-01\\\\\\\", topic: \\\\\\\"artificial-intelligence\\\\\\\") { edges { node { id name tagline url votesCount createdAt thumbnail { url } } } } }\"}",
+        "bodyParameters": {},
         "options": {
           "response": {
             "response": {
